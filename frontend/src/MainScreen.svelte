@@ -1,11 +1,9 @@
 <script lang="ts">
-  import Select from "svelte-select";
-  import logo from "./assets/images/logo-universal.png";
+  import logo from "./assets/images/OTBaiak.gif";
   import whatsappIcon from "./assets/images/social/whatsapp1.png";
   import discordIcon from "./assets/images/social/discord1.png";
   import {
     ActiveDownload,
-    DownloadMaps,
     DownloadPercent,
     DownloadedBytes,
     DownloadedFiles,
@@ -21,7 +19,6 @@
   import { BrowserOpenURL } from "../wailsjs/runtime/runtime";
   import { onMount } from "svelte";
   import PlayIcon from "./PlayIcon.svelte";
-  import DownloadIcon from "./DownloadIcon.svelte";
   import SettingsIcon from "./SettingsIcon.svelte";
 
   type GameId = "tibia1511" | "otclient";
@@ -39,7 +36,6 @@
 
   export let openSettings: (gameId: GameId) => void;
 
-  let selectedGame: GameId = "tibia1511";
   let updating = false;
   let ready = false;
   let updatingGame: GameId | "" = "";
@@ -51,7 +47,6 @@
   let downloadedBytes = 0;
   let activeDownload = "";
 
-  let mapKind = 0;
   let hasLocal = false;
 
   let states: Record<GameId, GameState> = {
@@ -113,28 +108,6 @@
     }, 1000);
   }
 
-  function downloadMaps() {
-    if (mapKind == null) return;
-
-    beginProgress(selectedGame);
-    void DownloadMaps(selectedGame, mapKind);
-
-    const interval = setInterval(async () => {
-      totalFiles = await TotalFiles();
-      totalBytes = await TotalBytes();
-      downloadedBytes = await DownloadedBytes();
-      downloadedFiles = await DownloadedFiles();
-      activeDownload = await ActiveDownload();
-      progress = await DownloadPercent();
-
-      if (progress === 100) {
-        updating = false;
-        updatingGame = "";
-        clearInterval(interval);
-      }
-    }, 1000);
-  }
-
   function formatBytes(bytes: number, decimals = 2) {
     if (!+bytes) return "0 Bytes";
     const k = 1024;
@@ -164,18 +137,7 @@
     BrowserOpenURL(url);
   }
 
-  const mapTypes = [
-    { value: 0, label: "Full w/ markers" },
-    { value: 1, label: "Full w/o markers" },
-    { value: 2, label: "Overlayed w/ markers" },
-    { value: 3, label: "Overlayed w/o markers" },
-    { value: 4, label: "Overlayed w/ markers (+PoI)" },
-  ];
 </script>
-
-<button class="settings" on:click={() => openSettings(selectedGame)} disabled={updating}>
-  <SettingsIcon />
-</button>
 
 <div>
   <img alt="Logo" id="logo" src={logo} />
@@ -201,8 +163,15 @@
     <div class="play-grid">
       {#each games as game}
         <div class="game-card">
-          <h3>{game.name}</h3>
-          <small>{game.subtitle}</small>
+          <div class="card-header">
+            <div>
+              <h3>{game.name}</h3>
+              <small>{game.subtitle}</small>
+            </div>
+            <button class="settings" on:click={() => openSettings(game.id)} disabled={updating}>
+              <SettingsIcon />
+            </button>
+          </div>
 
           {#if updating && updatingGame === game.id}
             <button class="update" disabled>
@@ -227,16 +196,6 @@
               {/if}
             </div>
 
-            <button
-              class="select"
-              on:click={() => {
-                selectedGame = game.id;
-              }}
-              disabled={updating}
-            >
-              Selecionar para mapas/config
-            </button>
-
             <span class="status-line">
               {#if states[game.id].version}
                 {states[game.id].version} + rev.{states[game.id].revision}
@@ -247,17 +206,6 @@
           {/if}
         </div>
       {/each}
-    </div>
-
-    <div class="maps">
-      <h3>Mapas ({selectedGame === "tibia1511" ? "Tibia 15.11" : "OTClient"})</h3>
-      <div class="map-select">
-        <Select bind:justValue={mapKind} items={mapTypes} />
-      </div>
-      <button disabled={!ready || updating} on:click={downloadMaps}>
-        <DownloadIcon />
-        Download + Install Maps
-      </button>
     </div>
   </div>
 
@@ -428,32 +376,10 @@
     color: #d3dae8;
   }
 
-  .maps {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .map-select {
-    width: 220px;
-    --border-radius: 16px;
-    --list-border-radius: 16px;
-    --item-color: #4e3bf5;
-    --item-hover-color: #4e3bf5;
-    --placeholder-color: #4e3bf5;
-    --selected-item-color: #4e3bf5;
-  }
-
   h3 {
     margin: 0;
     padding: 0;
     font-size: 16px;
-  }
-
-  .maps button {
-    width: 100%;
-    height: 40px;
-    background-color: #4e3bf5;
   }
 
   .play.local {
@@ -478,25 +404,26 @@
     color: #dae0ef;
   }
 
-  .select {
-    width: 220px;
-    height: 32px;
-    background-color: #123054;
-    font-size: 12px;
+  .card-header {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+    width: 100%;
   }
 
   button.settings {
-    position: absolute;
-    top: 0;
-    right: 0;
-    width: 48px;
-    height: 48px;
-    margin: 8px;
+    width: 32px;
+    height: 32px;
+    margin: 0;
+    padding: 4px;
     display: flex;
     flex-direction: row;
     align-items: center;
     justify-content: center;
     box-shadow: none;
+    background: rgba(255,255,255,0.05);
+    border-radius: 6px;
   }
 
   .global-status {
