@@ -133,8 +133,74 @@ func doUpdate(logger *logrus.Logger, url string) error {
 	return nil
 }
 
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	if _, err := io.Copy(out, in); err != nil {
+		return err
+	}
+
+	return out.Sync()
+}
+
+func ensureDesktopExecutable(logger *logrus.Logger) {
+	if runtime.GOOS != "windows" {
+		return
+	}
+
+	if viper.GetBool("desktop_exe_created") {
+		return
+	}
+
+	executable, err := os.Executable()
+	if err != nil {
+		logger.Errorf("Failed to get executable path for desktop copy: %v", err)
+		return
+	}
+
+	profile := os.Getenv("USERPROFILE")
+	if profile == "" {
+		logger.Warn("USERPROFILE not set, skipping desktop executable creation")
+		return
+	}
+
+	desktopPath := filepath.Join(profile, "Desktop")
+	if err := os.MkdirAll(desktopPath, 0755); err != nil {
+		logger.Errorf("Failed to ensure Desktop directory exists: %v", err)
+		return
+	}
+
+	dst := filepath.Join(desktopPath, "OTBaiak.exe")
+	if _, err := os.Stat(dst); err == nil {
+		viper.Set("desktop_exe_created", true)
+		return
+	}
+
+	if err := copyFile(executable, dst); err != nil {
+		logger.Errorf("Failed to create desktop executable: %v", err)
+		return
+	}
+
+	if err := os.Chmod(dst, 0755); err != nil {
+		logger.Warnf("Failed to set desktop executable permissions: %v", err)
+	}
+
+	logger.Infof("Created desktop executable at %s", dst)
+	viper.Set("desktop_exe_created", true)
+}
+
 func main() {
-	baseURL := "https://raw.githubusercontent.com/luan/tibia-client/main/"
+	baseURL := "https://www.otbaiak.com/launcher/"
 	executable, err := os.Executable()
 	if err != nil {
 		fmt.Printf("Failed to get executable path: %v", err)
@@ -158,7 +224,13 @@ func main() {
 		viper.Set("base_url", baseURL)
 	}
 
-	if err := viper.WriteConfigAs(filepath.Join(configDirectory(appName), "config.toml")); err != nil {
+	configPath := filepath.Join(configDirectory(appName), "config.toml")
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		if err := viper.WriteConfigAs(configPath); err != nil {
+			fmt.Printf("Failed to write config file: %v", err)
+			os.Exit(1)
+		}
+	} else if err := viper.WriteConfig(); err != nil {
 		fmt.Printf("Failed to write config file: %v", err)
 		os.Exit(1)
 	}
@@ -200,6 +272,11 @@ func main() {
 	if err := doUpdate(logger, baseURL+executable); err != nil {
 		logger.Errorf("Failed to update: %v", err)
 		os.Exit(1)
+	}
+
+	ensureDesktopExecutable(logger)
+	if err := viper.WriteConfig(); err != nil {
+		logger.Warnf("Failed to persist launcher configuration: %v", err)
 	}
 
 	app := NewApp(logger, baseURL, appName, parallel)

@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -45,14 +46,36 @@ type ClientInfo struct {
 	Variant    string `json:"variant"`
 }
 
+type GameProfile struct {
+	ID         string
+	Name       string
+	RemotePath string
+	InstallDir string
+}
+
+var gameProfiles = map[string]GameProfile{
+	"tibia1511": {
+		ID:         "tibia1511",
+		Name:       "Tibia 15.11",
+		RemotePath: "tibia1511",
+		InstallDir: "OTBaiak Client",
+	},
+	"otclient": {
+		ID:         "otclient",
+		Name:       "OTClient",
+		RemotePath: "otclient",
+		InstallDir: "OTBClient",
+	},
+}
+
 type App struct {
 	ctx     context.Context
 	logger  *logrus.Logger
 	baseURL string
 	appName string
 
-	clientInfo ClientInfo
-	assetsInfo AssetsInfo
+	clientInfo map[string]ClientInfo
+	assetsInfo map[string]AssetsInfo
 
 	totalBytes      int64
 	totalFiles      int64
@@ -64,7 +87,6 @@ type App struct {
 	activeDownloads map[string]struct{}
 	mutex           sync.Mutex
 
-	queue  chan File
 	cancel chan struct{}
 }
 
@@ -72,11 +94,12 @@ func NewApp(logger *logrus.Logger, baseURL string, appName string, parallel int)
 	return &App{
 		logger:          logger,
 		baseURL:         baseURL,
-		queue:           make(chan File, 16),
 		cancel:          make(chan struct{}),
 		activeDownloads: make(map[string]struct{}),
 		parallel:        parallel,
 		appName:         appName,
+		clientInfo:      make(map[string]ClientInfo),
+		assetsInfo:      make(map[string]AssetsInfo),
 	}
 }
 
@@ -84,14 +107,15 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 }
 
-func (a *App) OpenClientLocation() {
+func (a *App) OpenClientLocation(gameID string) {
 	fmt.Println("Opening client location")
+	appDir := a.appDirectory(gameID)
 	if runtime.GOOS == "darwin" {
-		exec.Command("open", a.appDirectory()).Start()
+		exec.Command("open", appDir).Start()
 	} else if runtime.GOOS == "windows" {
-		exec.Command("explorer", a.appDirectory()).Start()
+		exec.Command("explorer", appDir).Start()
 	} else if runtime.GOOS == "linux" {
-		exec.Command("xdg-open", a.appDirectory()).Start()
+		exec.Command("xdg-open", appDir).Start()
 	}
 }
 
@@ -99,44 +123,68 @@ func (a *App) Exit() {
 	os.Exit(0)
 }
 
-func (a *App) remoteClientJSON() string {
+func (a *App) remoteClientJSON(gameID string) string {
 	return "client." + a.OS() + ".json"
 }
 
-func (a *App) remoteAssetsJSON() string {
+func (a *App) remoteAssetsJSON(gameID string) string {
 	return "assets." + a.OS() + ".json"
 }
 
-func (a *App) refreshManifests() {
-	err := a.downloadFile(a.baseURL+a.remoteClientJSON(), "client.json", false)
-	if err != nil {
-		a.logger.Errorf("Error downloading %s: %v", a.remoteClientJSON(), err)
+func (a *App) gameBaseURL(gameID string) string {
+	profile, ok := gameProfiles[gameID]
+	if !ok {
+		return strings.TrimRight(a.baseURL, "/") + "/"
 	}
-
-	err = readJSON(filepath.Join(a.appDirectory(), "client.json"), &a.clientInfo)
-	if err != nil {
-		a.logger.Errorf("Error reading %s: %v", "client.json", err)
-	}
-
-	err = a.downloadFile(a.baseURL+a.remoteAssetsJSON(), "assets.json", false)
-	if err != nil {
-		a.logger.Errorf("Error downloading %s: %v", a.remoteAssetsJSON(), err)
-	}
-
-	err = readJSON(filepath.Join(a.appDirectory(), "assets.json"), &a.assetsInfo)
-	if err != nil {
-		a.logger.Errorf("Error reading %s: %v", "assets.json", err)
-	}
+	base := strings.TrimRight(a.baseURL, "/") + "/"
+	return base + strings.Trim(profile.RemotePath, "/") + "/"
 }
 
-func (a *App) Version() string {
-	a.refreshManifests()
-	return a.clientInfo.Version
+func (a *App) resolveDownloadURL(gameID, remotePath string) string {
+	if strings.HasPrefix(remotePath, "http://") || strings.HasPrefix(remotePath, "https://") {
+		return remotePath
+	}
+	return a.gameBaseURL(gameID) + strings.TrimLeft(remotePath, "/")
 }
 
-func (a *App) Revision() int {
-	a.refreshManifests()
-	return a.clientInfo.Revision
+func (a *App) refreshManifests(gameID string) {
+	err := a.downloadFile(a.resolveDownloadURL(gameID, a.remoteClientJSON(gameID)), gameID, "client.json", false)
+	if err != nil {
+		a.logger.Errorf("Error downloading %s for %s: %v", a.remoteClientJSON(gameID), gameID, err)
+		return
+	}
+
+	var clientInfo ClientInfo
+	err = readJSON(filepath.Join(a.appDirectory(gameID), "client.json"), &clientInfo)
+	if err != nil {
+		a.logger.Errorf("Error reading %s for %s: %v", "client.json", gameID, err)
+		return
+	}
+	a.clientInfo[gameID] = clientInfo
+
+	err = a.downloadFile(a.resolveDownloadURL(gameID, a.remoteAssetsJSON(gameID)), gameID, "assets.json", false)
+	if err != nil {
+		a.logger.Errorf("Error downloading %s for %s: %v", a.remoteAssetsJSON(gameID), gameID, err)
+		return
+	}
+
+	var assetsInfo AssetsInfo
+	err = readJSON(filepath.Join(a.appDirectory(gameID), "assets.json"), &assetsInfo)
+	if err != nil {
+		a.logger.Errorf("Error reading %s for %s: %v", "assets.json", gameID, err)
+		return
+	}
+	a.assetsInfo[gameID] = assetsInfo
+}
+
+func (a *App) Version(gameID string) string {
+	a.refreshManifests(gameID)
+	return a.clientInfo[gameID].Version
+}
+
+func (a *App) Revision(gameID string) int {
+	a.refreshManifests(gameID)
+	return a.clientInfo[gameID].Revision
 }
 
 func (a *App) DownloadPercent() float64 {
@@ -171,7 +219,15 @@ func (a *App) ToggleLocal(value bool) {
 }
 
 func (a *App) saveConfig() {
-	if err := viper.WriteConfigAs(filepath.Join(configDirectory(a.appName), "config.toml")); err != nil {
+	configPath := filepath.Join(configDirectory(a.appName), "config.toml")
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		if err := viper.WriteConfigAs(configPath); err != nil {
+			a.logger.Errorf("Error writing config: %v", err)
+		}
+		return
+	}
+
+	if err := viper.WriteConfig(); err != nil {
 		a.logger.Errorf("Error writing config: %v", err)
 	}
 }
@@ -197,10 +253,11 @@ func (a *App) ActiveDownload() string {
 	return ""
 }
 
-func (a *App) Update() {
-	files, err := a.filesToUpdate()
+func (a *App) Update(gameID string) {
+	files, err := a.filesToUpdate(gameID)
 	if err != nil {
-		a.logger.Errorf("Error checking for updates: %v", err)
+		a.logger.Errorf("Error checking for updates for %s: %v", gameID, err)
+		return
 	}
 
 	a.totalFiles = int64(len(files))
@@ -211,19 +268,36 @@ func (a *App) Update() {
 		a.totalBytes += int64(file.PackedSize)
 	}
 
-	for i := 0; i < a.parallel; i++ {
+	if len(files) == 0 {
+		return
+	}
+
+	workers := a.parallel
+	if workers > len(files) {
+		workers = len(files)
+	}
+
+	queue := make(chan File, len(files))
+
+	wg := sync.WaitGroup{}
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			for {
 				select {
 				case <-a.cancel:
 					return
 				case <-a.ctx.Done():
 					return
-				case file := <-a.queue:
+				case file, ok := <-queue:
+					if !ok {
+						return
+					}
 					a.mutex.Lock()
 					a.activeDownloads[file.URL] = struct{}{}
 					a.mutex.Unlock()
-					err := a.downloadFile(a.baseURL+file.URL, file.LocalFile, true)
+					err := a.downloadFile(a.resolveDownloadURL(gameID, file.URL), gameID, file.LocalFile, true)
 					a.mutex.Lock()
 					delete(a.activeDownloads, file.URL)
 					a.mutex.Unlock()
@@ -238,8 +312,10 @@ func (a *App) Update() {
 	}
 
 	for _, file := range files {
-		a.queue <- file
+		queue <- file
 	}
+	close(queue)
+	wg.Wait()
 }
 
 var mapKinds = map[int]string{
@@ -256,45 +332,53 @@ var mapLocations = map[string]string{
 	"linux":   "minimap",
 }
 
-func (a *App) DownloadMaps(kind int) {
+func (a *App) DownloadMaps(gameID string, kind int) {
 	a.totalBytes = 0
 	a.downloadedBytes = 0
 	a.totalFiles = 1
 	a.downloadedFiles = 0
 	a.logger.Infof("Downloading %s", mapKinds[kind])
-	err := a.downloadZip(mapKinds[kind], mapLocations[a.OS()], true)
+	err := a.downloadZip(mapKinds[kind], gameID, mapLocations[a.OS()], true)
 	if err != nil {
 		a.logger.Errorf("Error downloading %s: %v", mapKinds[kind], err)
 		return
 	}
 }
 
-func (a *App) NeedsUpdate() bool {
-	a.refreshManifests()
-	files, err := a.filesToUpdate()
+func (a *App) NeedsUpdate(gameID string) bool {
+	a.refreshManifests(gameID)
+	files, err := a.filesToUpdate(gameID)
 	if err != nil {
-		a.logger.Errorf("Error checking for updates: %v", err)
+		a.logger.Errorf("Error checking for updates for %s: %v", gameID, err)
 		return false
 	}
 	return len(files) > 0
 }
 
-func (a *App) appDirectory() string {
+func (a *App) appDirectory(gameID string) string {
 	configDir, err := os.UserConfigDir()
 	if err != nil {
 		a.logger.Errorf("Error getting config directory: %v", err)
 		return ""
 	}
-	appName := a.appName
+	profile, ok := gameProfiles[gameID]
+	if !ok {
+		a.logger.Errorf("Unknown game profile: %s", gameID)
+		return filepath.Join(configDir, a.appName)
+	}
+
+	appName := filepath.Join(a.appName, profile.InstallDir)
 	if a.OS() == "mac" {
-		appName = a.appName + ".app"
+		appName = filepath.Join(a.appName, profile.InstallDir+".app")
 	}
 	return filepath.Join(configDir, appName)
 }
 
-func (a *App) filesToUpdate() ([]File, error) {
+func (a *App) filesToUpdate(gameID string) ([]File, error) {
 	var files []File
-	filesTocheck := append(a.assetsInfo.Files, a.clientInfo.Files...)
+	assets := a.assetsInfo[gameID]
+	client := a.clientInfo[gameID]
+	filesTocheck := append(assets.Files, client.Files...)
 
 	mutex := sync.Mutex{}
 	wg := sync.WaitGroup{}
@@ -304,7 +388,7 @@ func (a *App) filesToUpdate() ([]File, error) {
 		go func(file File) {
 			defer wg.Done()
 
-			localFilePath := filepath.Join(a.appDirectory(), file.LocalFile)
+			localFilePath := filepath.Join(a.appDirectory(gameID), file.LocalFile)
 			if !fileExists(localFilePath) {
 				a.logger.Infof("File %s does not exist", localFilePath)
 				mutex.Lock()
@@ -351,8 +435,8 @@ func readJSON(s string, d interface{}) error {
 	return nil
 }
 
-func (a *App) downloadZip(url, dst string, progress bool) error {
-	dst = filepath.Join(a.appDirectory(), dst)
+func (a *App) downloadZip(url, gameID, dst string, progress bool) error {
+	dst = filepath.Join(a.appDirectory(gameID), dst)
 	err := os.MkdirAll(filepath.Dir(dst), 0755)
 	if err != nil {
 		return err
@@ -439,9 +523,9 @@ func unzip(src, dst string) error {
 	return nil
 }
 
-func (a *App) downloadFile(url, dst string, progress bool) error {
+func (a *App) downloadFile(url, gameID, dst string, progress bool) error {
 	a.logger.Infof("Downloading %s to %s", url, dst)
-	dst = filepath.Join(a.appDirectory(), dst)
+	dst = filepath.Join(a.appDirectory(gameID), dst)
 	err := os.MkdirAll(filepath.Dir(dst), 0755)
 	if err != nil {
 		return err
@@ -486,7 +570,7 @@ func (a *App) downloadFile(url, dst string, progress bool) error {
 	return nil
 }
 
-func (a *App) localExecutable() string {
+func (a *App) localExecutable(gameID string) string {
 	name := "Contents/MacOS/client-local"
 	if a.OS() == "windows" {
 		name = "bin/client-local.exe"
@@ -494,20 +578,20 @@ func (a *App) localExecutable() string {
 	if a.OS() == "linux" {
 		name = "bin/client-local"
 	}
-	return filepath.Join(a.appDirectory(), name)
+	return filepath.Join(a.appDirectory(gameID), name)
 }
 
-func (a *App) executable() string {
-	return filepath.Join(a.appDirectory(), a.clientInfo.Executable)
+func (a *App) executable(gameID string) string {
+	return filepath.Join(a.appDirectory(gameID), a.clientInfo[gameID].Executable)
 }
 
-func (a *App) Play(local bool) {
-	executable := a.executable()
+func (a *App) Play(gameID string, local bool) {
+	executable := a.executable(gameID)
 	if local {
-		executable = a.localExecutable()
+		executable = a.localExecutable(gameID)
 	}
 	a.logger.Infof("Launching %s", executable)
-	os.Chmod(a.executable(), 0755)
+	os.Chmod(a.executable(gameID), 0755)
 	if err := syscall.Exec(executable, []string{"--battleeye"}, os.Environ()); err != nil {
 		a.logger.Errorf("Failed to launch %s: %s | attempting regular fork", executable, err)
 		cmd := exec.Command(executable, "--battleeye")

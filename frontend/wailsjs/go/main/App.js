@@ -6,8 +6,8 @@ export function ActiveDownload() {
   return window['go']['main']['App']['ActiveDownload']();
 }
 
-export function DownloadMaps(arg1) {
-  return window['go']['main']['App']['DownloadMaps'](arg1);
+export function DownloadMaps(arg1, arg2) {
+  return window['go']['main']['App']['DownloadMaps'](arg1, arg2);
 }
 
 export function DownloadPercent() {
@@ -30,24 +30,24 @@ export function LocalEnabled() {
   return window['go']['main']['App']['LocalEnabled']();
 }
 
-export function NeedsUpdate() {
-  return window['go']['main']['App']['NeedsUpdate']();
+export function NeedsUpdate(arg1) {
+  return window['go']['main']['App']['NeedsUpdate'](arg1);
 }
 
 export function OS() {
   return window['go']['main']['App']['OS']();
 }
 
-export function OpenClientLocation() {
-  return window['go']['main']['App']['OpenClientLocation']();
+export function OpenClientLocation(arg1) {
+  return window['go']['main']['App']['OpenClientLocation'](arg1);
 }
 
-export function Play(arg1) {
-  return window['go']['main']['App']['Play'](arg1);
+export function Play(arg1, arg2) {
+  return window['go']['main']['App']['Play'](arg1, arg2);
 }
 
-export function Revision() {
-  return window['go']['main']['App']['Revision']();
+export function Revision(arg1) {
+  return window['go']['main']['App']['Revision'](arg1);
 }
 
 export function ToggleLocal(arg1) {
@@ -62,12 +62,12 @@ export function TotalFiles() {
   return window['go']['main']['App']['TotalFiles']();
 }
 
-export function Update() {
-  return window['go']['main']['App']['Update']();
+export function Update(arg1) {
+  return window['go']['main']['App']['Update'](arg1);
 }
 
-export function Version() {
-  return window['go']['main']['App']['Version']();
+export function Version(arg1) {
+  return window['go']['main']['App']['Version'](arg1);
 }
 
 export function Write(arg1) {

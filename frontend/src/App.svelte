@@ -5,7 +5,10 @@
   import Settings from "./Settings.svelte";
   import CloseIcon from "./CloseIcon.svelte";
 
+  type GameId = "tibia1511" | "otclient";
+
   let currentView = "main";
+  let activeGame: GameId = "tibia1511";
 
   onMount(async () => {});
 </script>
@@ -16,9 +19,14 @@
   </button>
 
   {#if currentView === "main"}
-    <MainScreen openSettings={() => (currentView = "settings")} />
+    <MainScreen
+      openSettings={(gameId) => {
+        activeGame = gameId;
+        currentView = "settings";
+      }}
+    />
   {:else if currentView === "settings"}
-    <Settings closeSettings={() => (currentView = "main")} />
+    <Settings closeSettings={() => (currentView = "main")} activeGame={activeGame} />
   {/if}
 </main>
 

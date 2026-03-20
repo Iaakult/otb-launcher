@@ -3,7 +3,7 @@
 
 export function ActiveDownload():Promise<string>;
 
-export function DownloadMaps(arg1:number):Promise<void>;
+export function DownloadMaps(arg1:string,arg2:number):Promise<void>;
 
 export function DownloadPercent():Promise<number>;
 
@@ -15,15 +15,15 @@ export function Exit():Promise<void>;
 
 export function LocalEnabled():Promise<boolean>;
 
-export function NeedsUpdate():Promise<boolean>;
+export function NeedsUpdate(arg1:string):Promise<boolean>;
 
 export function OS():Promise<string>;
 
-export function OpenClientLocation():Promise<void>;
+export function OpenClientLocation(arg1:string):Promise<void>;
 
-export function Play(arg1:boolean):Promise<void>;
+export function Play(arg1:string,arg2:boolean):Promise<void>;
 
-export function Revision():Promise<number>;
+export function Revision(arg1:string):Promise<number>;
 
 export function ToggleLocal(arg1:boolean):Promise<void>;
 
@@ -31,8 +31,8 @@ export function TotalBytes():Promise<number>;
 
 export function TotalFiles():Promise<number>;
 
-export function Update():Promise<void>;
+export function Update(arg1:string):Promise<void>;
 
-export function Version():Promise<string>;
+export function Version(arg1:string):Promise<string>;
 
 export function Write(arg1:Array<number>):Promise<number>;
