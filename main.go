@@ -221,8 +221,16 @@ func main() {
 		baseURL = viper.GetString("base_url")
 	} else {
 		viper.Set("parallel", parallel)
-		viper.Set("base_url", baseURL)
 	}
+
+	baseURL = strings.TrimSpace(baseURL)
+	if baseURL == "" || strings.Contains(baseURL, "raw.githubusercontent.com/Iaakult/OTBaiak-Client") {
+		baseURL = "https://www.otbaiak.com/launcher/"
+	}
+	if !strings.HasSuffix(baseURL, "/") {
+		baseURL += "/"
+	}
+	viper.Set("base_url", baseURL)
 
 	configPath := filepath.Join(configDirectory(appName), "config.toml")
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {

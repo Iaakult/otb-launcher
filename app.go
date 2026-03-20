@@ -455,7 +455,7 @@ func (a *App) downloadZip(url, gameID, dst string, progress bool) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return err
+		return fmt.Errorf("download failed %s: HTTP %d", url, resp.StatusCode)
 	}
 
 	a.totalBytes = resp.ContentLength
