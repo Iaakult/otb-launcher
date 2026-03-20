@@ -29,9 +29,9 @@
     needsUpdate: boolean;
   };
 
-  const games: Array<{ id: GameId; name: string; subtitle: string }> = [
-    { id: "tibia1511", name: "Tibia 15.11", subtitle: "OTBaiak Client" },
-    { id: "otclient", name: "OTClient", subtitle: "OTBClient" },
+  const games: Array<{ id: GameId; name: string }> = [
+    { id: "tibia1511", name: "Tibia 15.11" },
+    { id: "otclient", name: "OTClient" },
   ];
 
   export let openSettings: (gameId: GameId) => void;
@@ -166,7 +166,6 @@
           <div class="card-header">
             <div>
               <h3>{game.name}</h3>
-              <small>{game.subtitle}</small>
             </div>
             <button class="settings" on:click={() => openSettings(game.id)} disabled={updating}>
               <SettingsIcon />
