@@ -158,10 +158,6 @@ func ensureDesktopExecutable(logger *logrus.Logger) {
 		return
 	}
 
-	if viper.GetBool("desktop_exe_created") {
-		return
-	}
-
 	executable, err := os.Executable()
 	if err != nil {
 		logger.Errorf("Failed to get executable path for desktop copy: %v", err)
@@ -182,7 +178,6 @@ func ensureDesktopExecutable(logger *logrus.Logger) {
 
 	dst := filepath.Join(desktopPath, "OTBaiak.exe")
 	if _, err := os.Stat(dst); err == nil {
-		viper.Set("desktop_exe_created", true)
 		return
 	}
 
@@ -196,7 +191,6 @@ func ensureDesktopExecutable(logger *logrus.Logger) {
 	}
 
 	logger.Infof("Created desktop executable at %s", dst)
-	viper.Set("desktop_exe_created", true)
 }
 
 func main() {
