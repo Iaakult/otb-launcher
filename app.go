@@ -20,6 +20,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
+	"github.com/ulikunitz/xz/lzma"
 )
 
 // ZipVersionInfo is sourced from version.json on the server.
@@ -558,6 +559,53 @@ func (a *App) executable(gameID string) string {
 	return direct
 }
 
+func inflateLZMAFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	r, err := lzma.NewReader(in)
+	if err != nil {
+		return err
+	}
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	if _, err := io.Copy(out, r); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (a *App) ensureExecutableReady(executable string) (string, error) {
+	if fileExists(executable) {
+		return executable, nil
+	}
+
+	compressed := executable + ".lzma"
+	if !fileExists(compressed) {
+		return executable, fmt.Errorf("executable not found (%s) and no compressed fallback (%s)", executable, compressed)
+	}
+
+	a.logger.Warnf("Executable missing, inflating %s -> %s", compressed, executable)
+	if err := inflateLZMAFile(compressed, executable); err != nil {
+		return executable, err
+	}
+
+	if err := os.Chmod(executable, 0755); err != nil {
+		a.logger.Warnf("Failed to set executable permission on %s: %v", executable, err)
+	}
+
+	return executable, nil
+}
+
 func (a *App) Play(gameID string, local bool) {
 	// Ensure versionInfo is populated so executable() has the right name.
 	if a.versionInfo[gameID].Executable == "" {
@@ -567,20 +615,21 @@ func (a *App) Play(gameID string, local bool) {
 	if local {
 		executable = a.localExecutable(gameID)
 	}
-	if !fileExists(executable) {
-		a.logger.Errorf("Executable not found: %s", executable)
+	resolvedExecutable, err := a.ensureExecutableReady(executable)
+	if err != nil {
+		a.logger.Errorf("Executable not ready: %v", err)
 		return
 	}
-	a.logger.Infof("Launching %s", executable)
-	os.Chmod(executable, 0755)
-	if err := syscall.Exec(executable, []string{executable, "--battleeye"}, os.Environ()); err != nil {
-		a.logger.Errorf("Failed to launch %s: %s | attempting regular fork", executable, err)
-		cmd := exec.Command(executable, "--battleeye")
+	a.logger.Infof("Launching %s", resolvedExecutable)
+	os.Chmod(resolvedExecutable, 0755)
+	if err := syscall.Exec(resolvedExecutable, []string{resolvedExecutable, "--battleeye"}, os.Environ()); err != nil {
+		a.logger.Errorf("Failed to launch %s: %s | attempting regular fork", resolvedExecutable, err)
+		cmd := exec.Command(resolvedExecutable, "--battleeye")
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		cmd.Env = os.Environ()
 		if err := cmd.Start(); err != nil {
-			a.logger.Errorf("Failed to launch %s: %s", executable, err)
+			a.logger.Errorf("Failed to launch %s: %s", resolvedExecutable, err)
 		}
 		os.Exit(0)
 	}
