@@ -14,6 +14,7 @@
     TotalBytes,
     TotalFiles,
     Update,
+    UpdateError,
     Version,
   } from "../wailsjs/go/main/App.js";
   import { BrowserOpenURL } from "../wailsjs/runtime/runtime";
@@ -48,6 +49,7 @@
   let activeDownload = "";
 
   let hasLocal = false;
+  let updateErrorMsg = "";
 
   let states: Record<GameId, GameState> = {
     tibia1511: { version: "", revision: 0, needsUpdate: false },
@@ -95,10 +97,13 @@
       progress = await DownloadPercent();
 
       if (totalFiles > 0 && downloadedFiles >= totalFiles) {
+        updateErrorMsg = await UpdateError();
         updating = false;
         updatingGame = "";
         clearInterval(interval);
-        await refreshGameState(game);
+        if (!updateErrorMsg) {
+          await refreshGameState(game);
+        }
       }
     }, 1000);
   }
@@ -172,6 +177,17 @@
               <div>{downloadedFiles} / {totalFiles} files</div>
               <div>{formatBytes(downloadedBytes)} / {formatBytes(totalBytes)}</div>
             </button>
+          {:else if updateErrorMsg && updatingGame === ""}
+            <div class="row">
+              <button
+                class="play needsUpdate"
+                disabled={!ready || updating}
+                on:click={() => { updateErrorMsg = ""; update(game.id); }}
+              >
+                Tentar novamente
+              </button>
+            </div>
+            <span class="status-line" style="color:#e05252">{updateErrorMsg}</span>
           {:else}
             <div class="row">
               <button
@@ -200,7 +216,7 @@
               {#if states[game.id].version}
                 {states[game.id].version} + rev.{states[game.id].revision}
               {:else}
-                Carregando manifest...
+                Carregando versao...
               {/if}
             </span>
           {/if}

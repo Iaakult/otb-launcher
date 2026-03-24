@@ -17,6 +17,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"syscall"
+	"path"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
@@ -66,6 +67,7 @@ type App struct {
 	totalFiles      int64
 	downloadedBytes int64
 	downloadedFiles int64
+	updateError     string
 
 	parallel int
 
@@ -199,6 +201,10 @@ func (a *App) DownloadedBytes() int64 {
 	return a.downloadedBytes
 }
 
+func (a *App) UpdateError() string {
+	return a.updateError
+}
+
 func (a *App) ToggleLocal(value bool) {
 	a.logger.Infof("Setting enableLocal to %v", value)
 	viper.Set("enableLocal", value)
@@ -241,9 +247,23 @@ func (a *App) ActiveDownload() string {
 }
 
 func (a *App) Update(gameID string) {
+	a.updateError = ""
+	a.totalFiles = 1
+	a.totalBytes = 0
+	a.downloadedFiles = 0
+	a.downloadedBytes = 0
+
+	// Guarantee the UI polling loop always exits, even if we return early on error.
+	defer func() {
+		if atomic.LoadInt64(&a.downloadedFiles) < atomic.LoadInt64(&a.totalFiles) {
+			atomic.StoreInt64(&a.downloadedFiles, atomic.LoadInt64(&a.totalFiles))
+		}
+	}()
+
 	a.refreshVersion(gameID)
 	info := a.versionInfo[gameID]
 	if info.Version == "" {
+		a.updateError = "versão não encontrada para " + gameID
 		a.logger.Errorf("No version info available for %s — cannot update", gameID)
 		return
 	}
@@ -254,10 +274,6 @@ func (a *App) Update(gameID string) {
 	characterDataBackupDir := installDir + ".characterdata_backup"
 	preservedCharacterData := false
 
-	a.totalFiles = 1
-	a.totalBytes = 0
-	a.downloadedFiles = 0
-	a.downloadedBytes = 0
 
 	a.logger.Infof("Downloading %s zip from %s", gameID, zipURL)
 
@@ -288,6 +304,7 @@ func (a *App) Update(gameID string) {
 	_, err = io.Copy(tmpFile, io.TeeReader(resp.Body, a))
 	tmpFile.Close()
 	if err != nil {
+		a.updateError = "falha no download: " + err.Error()
 		a.logger.Errorf("Failed to write zip: %v", err)
 		return
 	}
@@ -322,6 +339,7 @@ func (a *App) Update(gameID string) {
 	if err := unzip(tmpPath, installDir, func() {
 		atomic.AddInt64(&a.downloadedFiles, 1)
 	}); err != nil {
+		a.updateError = "falha ao extrair: " + err.Error()
 		a.logger.Errorf("Failed to extract zip: %v", err)
 		return
 	}
@@ -483,6 +501,14 @@ func countZipFiles(src string) int64 {
 	return count
 }
 
+func sanitizeZipPath(dst, name string) (string, error) {
+	clean := filepath.Join(dst, filepath.FromSlash(path.Clean("/"+name)))
+	if !strings.HasPrefix(clean, filepath.Clean(dst)+string(os.PathSeparator)) && clean != filepath.Clean(dst) {
+		return "", fmt.Errorf("illegal zip path: %s", name)
+	}
+	return clean, nil
+}
+
 func unzip(src, dst string, onFile func()) error {
 	r, err := zip.OpenReader(src)
 	if err != nil {
@@ -492,15 +518,21 @@ func unzip(src, dst string, onFile func()) error {
 
 	for _, f := range r.File {
 		if f.FileInfo().IsDir() {
-			err := os.MkdirAll(filepath.Join(dst, f.Name), 0755)
+			dirPath, err := sanitizeZipPath(dst, f.Name)
 			if err != nil {
+				continue // skip bad paths
+			}
+			if err := os.MkdirAll(dirPath, 0755); err != nil {
 				return err
 			}
 			continue
 		}
 
-		err := os.MkdirAll(filepath.Join(dst, filepath.Dir(f.Name)), 0755)
+		destPath, err := sanitizeZipPath(dst, f.Name)
 		if err != nil {
+			continue // skip bad paths
+		}
+		if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
 			return err
 		}
 
@@ -509,7 +541,7 @@ func unzip(src, dst string, onFile func()) error {
 			return err
 		}
 
-		out, err := os.Create(filepath.Join(dst, f.Name))
+		out, err := os.Create(destPath)
 		if err != nil {
 			rc.Close()
 			return err

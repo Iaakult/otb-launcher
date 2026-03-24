@@ -7,36 +7,45 @@ Base URL usada pelo launcher:
 
 Crie os arquivos dentro de ./html/launcher com esta estrutura:
 
-- ./html/launcher/OTBaiak.exe
-- ./html/launcher/OTBaiak.exe.sha256
-- ./html/launcher/tibia1511/client.windows.json
-- ./html/launcher/tibia1511/client.linux.json
-- ./html/launcher/tibia1511/client.mac.json
-- ./html/launcher/tibia1511/assets.windows.json
-- ./html/launcher/tibia1511/assets.linux.json
-- ./html/launcher/tibia1511/assets.mac.json
-- ./html/launcher/otclient/client.windows.json
-- ./html/launcher/otclient/client.linux.json
-- ./html/launcher/otclient/client.mac.json
-- ./html/launcher/otclient/assets.windows.json
-- ./html/launcher/otclient/assets.linux.json
-- ./html/launcher/otclient/assets.mac.json
+- ./html/launcher/OTBaiak-Launcher.exe
+- ./html/launcher/OTBaiak-Launcher.exe.sha256
+- ./html/launcher/version.json
+- ./html/launcher/tibia1511.zip
+- ./html/launcher/otclient.zip
 
-## Regras dos manifests
+## Formato do version.json
 
-- Cada arquivo em "files" deve ter "url" relativa ao diretório do jogo.
-- Exemplo para tibia1511:
-  - "url": "bin/client.exe.lzma"
-- Exemplo para otclient:
-  - "url": "otclient"
+```json
+{
+  "tibia1511": {
+    "version": "1.0",
+    "executable": "bin/client.exe"
+  },
+  "otclient": {
+    "version": "1.0",
+    "executable": "OTBaiak OTC.exe"
+  }
+}
+```
+
+## Regras do pacote
+
+- O launcher baixa apenas `gameID.zip`.
+- O ZIP deve conter os arquivos finais prontos para rodar.
+- Nao use `.lzma` dentro do ZIP.
+- Nao use manifests de assets.
+- Nao use patch incremental.
+- O launcher preserva apenas a pasta `characterdata` durante update.
 
 ## Fluxo no launcher
 
-- Ao clicar em Play, o launcher checa update do jogo selecionado.
-- Se houver arquivos faltando ou diferentes de hash, ele baixa tudo e abre o jogo.
+- Ao clicar em Play, o launcher checa `version.json`.
+- Se a versao remota for diferente da local, baixa `gameID.zip`.
+- Remove a pasta antiga, preservando apenas `characterdata`.
+- Extrai o ZIP diretamente no diretorio do jogo.
 - Se nao houver update, abre o jogo imediatamente.
 
 ## Atualizacao do proprio launcher
 
-- O launcher compara o hash em OTBaiak.exe.sha256 com o executavel local.
-- Quando o hash muda, baixa https://www.otbaiak.com/launcher/OTBaiak.exe e reinicia.
+- O launcher compara o hash do executavel publicado no servidor.
+- Quando o hash muda, baixa o novo launcher e reinicia.
