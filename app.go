@@ -562,6 +562,10 @@ func (a *App) ensureExecutableReady(executable string) (string, error) {
 	if fileExists(executable) {
 		return executable, nil
 	}
+	compressed := executable + ".lzma"
+	if fileExists(compressed) {
+		return executable, fmt.Errorf("executable not found: %s (found compressed file %s). This launcher no longer supports .lzma runtime files; publish a runnable zip with real .exe/.dll files", executable, compressed)
+	}
 	return executable, fmt.Errorf("executable not found: %s", executable)
 }
 
