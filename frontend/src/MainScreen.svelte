@@ -54,7 +54,7 @@
   let liveUrl = "";
   let twitchChannel = "";
   let twitchEmbedUrl = "";
-  let liveIframeSrc = "https://www.google.com";
+  let liveIframeSrc = "about:blank";
   let liveFrameLoaded = false;
   let liveFrameFailed = false;
   let liveFallbackTimer: ReturnType<typeof setTimeout> | null = null;
@@ -76,6 +76,7 @@
       liveIframeSrc = twitchEmbedUrl;
       startLiveFallbackTimer();
     } else {
+      liveIframeSrc = "about:blank";
       liveFrameFailed = true;
     }
     hasLocal = await LocalEnabled();
@@ -198,7 +199,7 @@
 
 </script>
 
-<div class="launcher-root">
+<div class="main-screen">
   <button class="live-box" on:click={() => openSocial(liveUrl || "https://www.twitch.tv") } aria-label="Abrir live na Twitch">
     <iframe
       src={liveIframeSrc}
@@ -212,7 +213,9 @@
     ></iframe>
     <span class="live-label">AO VIVO</span>
     <div class="live-fallback" class:show={liveFrameFailed}>
-      Live indisponivel - clique para assistir
+      <span>AO VIVO</span>
+      <br />
+      Clique para assistir
     </div>
   </button>
 
@@ -323,8 +326,12 @@
 </div>
 
 <style>
-  .launcher-root {
+  .main-screen {
     position: relative;
+    width: 100%;
+    min-height: 100%;
+    padding: 0 20px 20px;
+    box-sizing: border-box;
   }
 
   .live-box {
@@ -334,16 +341,25 @@
     width: 350px;
     height: 200px;
     padding: 0;
-    background: red;
-    border: 2px solid rgba(255, 255, 255, 0.2);
+    background: #111;
+    border: 2px solid rgba(255, 255, 255, 0.1);
     border-radius: 12px;
     overflow: hidden;
     z-index: 9999;
+    box-shadow: 0 0 20px rgba(255, 0, 0, 0.3);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .live-box:hover {
+    transform: scale(1.02);
+    box-shadow: 0 0 25px rgba(255, 0, 0, 0.5);
   }
 
   .live-box iframe {
+    display: block;
     border: 0;
     pointer-events: none;
+    background: #111;
   }
 
   .live-label {
@@ -363,6 +379,7 @@
     position: absolute;
     inset: 0;
     display: none;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     text-align: center;
@@ -371,6 +388,7 @@
     font-weight: 700;
     background: rgba(5, 11, 28, 0.88);
     z-index: 1;
+    line-height: 1.5;
   }
 
   .live-fallback.show {
@@ -386,7 +404,8 @@
 
   div.progress-bar {
     position: relative;
-    width: 512px;
+    width: 100%;
+    max-width: 512px;
     height: 20px;
     background: #222;
     border-radius: 10px;
@@ -395,7 +414,8 @@
   }
 
   .active-download {
-    width: 512px;
+    width: 100%;
+    max-width: 512px;
     color: white;
     display: flex;
     flex-direction: column;
@@ -491,6 +511,8 @@
     flex-direction: row;
     gap: 8px;
     margin: 8px 0;
+    width: 100%;
+    justify-content: center;
   }
 
   .social {
@@ -514,6 +536,9 @@
     align-items: start;
     gap: 12px;
     width: 100%;
+    justify-content: center;
+    box-sizing: border-box;
+    padding-right: 390px;
   }
 
   .play-grid {
@@ -589,5 +614,27 @@
     margin-top: 6px;
     font-size: 12px;
     color: #dae0ef;
+  }
+
+  @media (max-width: 980px) {
+    .main-screen {
+      padding: 12px;
+    }
+
+    .live-box {
+      position: relative;
+      top: auto;
+      right: auto;
+      width: min(100%, 350px);
+      margin: 8px auto 16px;
+    }
+
+    .actions {
+      padding-right: 0;
+    }
+
+    .play-grid {
+      grid-template-columns: 1fr;
+    }
   }
 </style>
