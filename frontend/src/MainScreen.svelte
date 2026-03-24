@@ -19,7 +19,7 @@
     Version,
   } from "../wailsjs/go/main/App.js";
   import { BrowserOpenURL } from "../wailsjs/runtime/runtime";
-  import { onMount } from "svelte";
+  import { onDestroy, onMount } from "svelte";
   import PlayIcon from "./PlayIcon.svelte";
   import SettingsIcon from "./SettingsIcon.svelte";
 
@@ -54,6 +54,9 @@
   let liveUrl = "";
   let twitchChannel = "";
   let twitchEmbedUrl = "";
+  let liveFrameLoaded = false;
+  let liveFrameFailed = false;
+  let liveFallbackTimer: ReturnType<typeof setTimeout> | null = null;
 
   let states: Record<GameId, GameState> = {
     tibia1511: { version: "", revision: 0, needsUpdate: false },
@@ -65,12 +68,48 @@
     await refreshGameState("otclient");
     liveUrl = await LiveURL();
     twitchChannel = extractTwitchChannel(liveUrl);
+    console.log("Live URL:", liveUrl);
+    console.log("Channel:", twitchChannel);
     if (twitchChannel) {
-      twitchEmbedUrl = `https://player.twitch.tv/?channel=${encodeURIComponent(twitchChannel)}&parent=otbaiak.com&parent=localhost&parent=wails.localhost&autoplay=true&muted=true`;
+      twitchEmbedUrl = `https://player.twitch.tv/?channel=${encodeURIComponent(twitchChannel)}&parent=localhost&parent=wails.localhost&autoplay=true&muted=true`;
+      startLiveFallbackTimer();
     }
     hasLocal = await LocalEnabled();
     ready = true;
   });
+
+  onDestroy(() => {
+    clearLiveFallbackTimer();
+  });
+
+  function clearLiveFallbackTimer() {
+    if (liveFallbackTimer) {
+      clearTimeout(liveFallbackTimer);
+      liveFallbackTimer = null;
+    }
+  }
+
+  function startLiveFallbackTimer() {
+    liveFrameLoaded = false;
+    liveFrameFailed = false;
+    clearLiveFallbackTimer();
+    liveFallbackTimer = setTimeout(() => {
+      if (!liveFrameLoaded) {
+        liveFrameFailed = true;
+      }
+    }, 8000);
+  }
+
+  function handleLiveLoaded() {
+    liveFrameLoaded = true;
+    liveFrameFailed = false;
+    clearLiveFallbackTimer();
+  }
+
+  function handleLiveError() {
+    liveFrameFailed = true;
+    clearLiveFallbackTimer();
+  }
 
   function extractTwitchChannel(url: string): string {
     try {
@@ -165,8 +204,13 @@
         frameborder="0"
         allowfullscreen
         title="Live Twitch"
+        on:load={handleLiveLoaded}
+        on:error={handleLiveError}
       ></iframe>
       <span class="live-label">AO VIVO</span>
+      {#if liveFrameFailed}
+        <div class="live-fallback">Live indisponivel - clique para assistir</div>
+      {/if}
     </button>
   {/if}
 
@@ -310,6 +354,21 @@
     font-weight: 700;
     padding: 2px 6px;
     border-radius: 999px;
+    z-index: 2;
+  }
+
+  .live-fallback {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 12px;
+    color: #fff;
+    font-weight: 700;
+    background: rgba(5, 11, 28, 0.88);
+    z-index: 1;
   }
 
   .progress-section {
