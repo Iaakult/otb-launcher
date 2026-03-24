@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -21,31 +20,17 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
-	"github.com/ulikunitz/xz/lzma"
 )
 
-type File struct {
-	LocalFile    string `json:"localfile"`
-	PackedHash   string `json:"packedhash"`
-	PackedSize   int    `json:"packedsize"`
-	URL          string `json:"url"`
-	UnpackedHash string `json:"unpackedhash"`
-	UnpackedSize int    `json:"unpackedsize"`
-}
-
-type AssetsInfo struct {
-	Files   []File `json:"files"`
-	Version int    `json:"version"`
-}
-
-type ClientInfo struct {
-	Revision   int    `json:"revision"`
+// ZipVersionInfo is sourced from version.json on the server.
+// Admin edits version.json to trigger a full re-download of the game zip.
+type ZipVersionInfo struct {
 	Version    string `json:"version"`
-	Files      []File `json:"files"`
 	Executable string `json:"executable"`
-	Generation string `json:"generation"`
-	Variant    string `json:"variant"`
 }
+
+// allVersions is the shape of /launcher/version.json — one key per gameID.
+type allVersions map[string]ZipVersionInfo
 
 type GameProfile struct {
 	ID         string
@@ -75,8 +60,7 @@ type App struct {
 	baseURL string
 	appName string
 
-	clientInfo map[string]ClientInfo
-	assetsInfo map[string]AssetsInfo
+	versionInfo map[string]ZipVersionInfo
 
 	totalBytes      int64
 	totalFiles      int64
@@ -99,8 +83,7 @@ func NewApp(logger *logrus.Logger, baseURL string, appName string, parallel int)
 		activeDownloads: make(map[string]struct{}),
 		parallel:        parallel,
 		appName:         appName,
-		clientInfo:      make(map[string]ClientInfo),
-		assetsInfo:      make(map[string]AssetsInfo),
+		versionInfo:     make(map[string]ZipVersionInfo),
 	}
 }
 
@@ -124,14 +107,6 @@ func (a *App) Exit() {
 	os.Exit(0)
 }
 
-func (a *App) remoteClientJSON(gameID string) string {
-	return "client." + a.OS() + ".json"
-}
-
-func (a *App) remoteAssetsJSON(gameID string) string {
-	return "assets." + a.OS() + ".json"
-}
-
 func (a *App) gameBaseURL(gameID string) string {
 	profile, ok := gameProfiles[gameID]
 	if !ok {
@@ -141,67 +116,56 @@ func (a *App) gameBaseURL(gameID string) string {
 	return base + strings.Trim(profile.RemotePath, "/") + "/"
 }
 
-func (a *App) resolveDownloadURL(gameID, remotePath string) string {
-	if strings.HasPrefix(remotePath, "http://") || strings.HasPrefix(remotePath, "https://") {
-		parsed, err := url.Parse(remotePath)
-		if err != nil {
-			return remotePath
-		}
-		parsed.Path = escapeURLPathSegments(parsed.Path)
-		return parsed.String()
+// refreshVersion downloads the single /launcher/version.json and caches
+// the entry for gameID. The file lives at baseURL, not inside the game subfolder.
+func (a *App) refreshVersion(gameID string) {
+	versionURL := strings.TrimRight(a.baseURL, "/") + "/version.json"
+	a.logger.Infof("Fetching %s", versionURL)
+	resp, err := http.Get(versionURL)
+	if err != nil {
+		a.logger.Errorf("Error fetching version.json: %v", err)
+		return
 	}
-	return a.gameBaseURL(gameID) + escapeURLPathSegments(strings.TrimLeft(remotePath, "/"))
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		a.logger.Errorf("version.json returned HTTP %d", resp.StatusCode)
+		return
+	}
+	var all allVersions
+	if err := json.NewDecoder(resp.Body).Decode(&all); err != nil {
+		a.logger.Errorf("Error parsing version.json: %v", err)
+		return
+	}
+	if info, ok := all[gameID]; ok {
+		a.versionInfo[gameID] = info
+	} else {
+		a.logger.Errorf("version.json has no entry for %s", gameID)
+	}
 }
 
-func escapeURLPathSegments(rawPath string) string {
-	parts := strings.Split(rawPath, "/")
-	for i, part := range parts {
-		if part == "" {
-			continue
-		}
-		parts[i] = url.PathEscape(part)
-	}
-	return strings.Join(parts, "/")
+func (a *App) versionFilePath(gameID string) string {
+	return filepath.Join(a.appDirectory(gameID), ".launcher_version")
 }
 
-func (a *App) refreshManifests(gameID string) {
-	err := a.downloadFile(a.resolveDownloadURL(gameID, a.remoteClientJSON(gameID)), gameID, "client.json", false)
+func (a *App) readLocalVersion(gameID string) string {
+	data, err := os.ReadFile(a.versionFilePath(gameID))
 	if err != nil {
-		a.logger.Errorf("Error downloading %s for %s: %v", a.remoteClientJSON(gameID), gameID, err)
-		return
+		return ""
 	}
+	return strings.TrimSpace(string(data))
+}
 
-	var clientInfo ClientInfo
-	err = readJSON(filepath.Join(a.appDirectory(gameID), "client.json"), &clientInfo)
-	if err != nil {
-		a.logger.Errorf("Error reading %s for %s: %v", "client.json", gameID, err)
-		return
-	}
-	a.clientInfo[gameID] = clientInfo
-
-	err = a.downloadFile(a.resolveDownloadURL(gameID, a.remoteAssetsJSON(gameID)), gameID, "assets.json", false)
-	if err != nil {
-		a.logger.Errorf("Error downloading %s for %s: %v", a.remoteAssetsJSON(gameID), gameID, err)
-		return
-	}
-
-	var assetsInfo AssetsInfo
-	err = readJSON(filepath.Join(a.appDirectory(gameID), "assets.json"), &assetsInfo)
-	if err != nil {
-		a.logger.Errorf("Error reading %s for %s: %v", "assets.json", gameID, err)
-		return
-	}
-	a.assetsInfo[gameID] = assetsInfo
+func (a *App) saveLocalVersion(gameID, version string) error {
+	return os.WriteFile(a.versionFilePath(gameID), []byte(version), 0644)
 }
 
 func (a *App) Version(gameID string) string {
-	a.refreshManifests(gameID)
-	return a.clientInfo[gameID].Version
+	a.refreshVersion(gameID)
+	return a.versionInfo[gameID].Version
 }
 
 func (a *App) Revision(gameID string) int {
-	a.refreshManifests(gameID)
-	return a.clientInfo[gameID].Revision
+	return 1
 }
 
 func (a *App) DownloadPercent() float64 {
@@ -271,68 +235,77 @@ func (a *App) ActiveDownload() string {
 }
 
 func (a *App) Update(gameID string) {
-	files, err := a.filesToUpdate(gameID)
-	if err != nil {
-		a.logger.Errorf("Error checking for updates for %s: %v", gameID, err)
+	a.refreshVersion(gameID)
+	info := a.versionInfo[gameID]
+	if info.Version == "" {
+		a.logger.Errorf("No version info available for %s — cannot update", gameID)
 		return
 	}
 
-	a.totalFiles = int64(len(files))
+	zipURL := strings.TrimRight(a.baseURL, "/") + "/" + gameID + ".zip"
+	installDir := a.appDirectory(gameID)
+
+	a.totalFiles = 1
 	a.totalBytes = 0
 	a.downloadedFiles = 0
 	a.downloadedBytes = 0
-	for _, file := range files {
-		a.totalBytes += int64(file.PackedSize)
-	}
 
-	if len(files) == 0 {
+	a.logger.Infof("Downloading %s zip from %s", gameID, zipURL)
+
+	tmpFile, err := os.CreateTemp("", gameID+"-*.zip")
+	if err != nil {
+		a.logger.Errorf("Failed to create temp file: %v", err)
+		return
+	}
+	tmpPath := tmpFile.Name()
+	defer os.Remove(tmpPath)
+
+	resp, err := http.Get(zipURL)
+	if err != nil {
+		a.logger.Errorf("Failed to download %s: %v", zipURL, err)
+		tmpFile.Close()
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		a.logger.Errorf("Failed to download %s: HTTP %d", zipURL, resp.StatusCode)
+		tmpFile.Close()
 		return
 	}
 
-	workers := a.parallel
-	if workers > len(files) {
-		workers = len(files)
+	a.totalBytes = resp.ContentLength
+
+	_, err = io.Copy(tmpFile, io.TeeReader(resp.Body, a))
+	tmpFile.Close()
+	if err != nil {
+		a.logger.Errorf("Failed to write zip: %v", err)
+		return
 	}
 
-	queue := make(chan File, len(files))
-
-	wg := sync.WaitGroup{}
-	for i := 0; i < workers; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for {
-				select {
-				case <-a.cancel:
-					return
-				case <-a.ctx.Done():
-					return
-				case file, ok := <-queue:
-					if !ok {
-						return
-					}
-					a.mutex.Lock()
-					a.activeDownloads[file.URL] = struct{}{}
-					a.mutex.Unlock()
-					err := a.downloadFile(a.resolveDownloadURL(gameID, file.URL), gameID, file.LocalFile, true)
-					a.mutex.Lock()
-					delete(a.activeDownloads, file.URL)
-					a.mutex.Unlock()
-					if err != nil {
-						a.logger.Errorf("Error downloading %s: %v", file.URL, err)
-						return
-					}
-					a.logger.Debugf("Downloaded %s", file.URL)
-				}
-			}
-		}()
+	a.logger.Infof("Clearing install dir %s", installDir)
+	if err := os.RemoveAll(installDir); err != nil {
+		a.logger.Errorf("Failed to clear install dir: %v", err)
+		return
+	}
+	if err := os.MkdirAll(installDir, 0755); err != nil {
+		a.logger.Errorf("Failed to recreate install dir: %v", err)
+		return
 	}
 
-	for _, file := range files {
-		queue <- file
+	a.logger.Infof("Extracting zip to %s", installDir)
+	if err := unzip(tmpPath, installDir); err != nil {
+		a.logger.Errorf("Failed to extract zip: %v", err)
+		return
 	}
-	close(queue)
-	wg.Wait()
+
+	if err := a.saveLocalVersion(gameID, info.Version); err != nil {
+		a.logger.Errorf("Failed to save local version: %v", err)
+		return
+	}
+
+	a.downloadedFiles = 1
+	a.logger.Infof("Update complete for %s → version %s", gameID, info.Version)
 }
 
 var mapKinds = map[int]string{
@@ -363,13 +336,12 @@ func (a *App) DownloadMaps(gameID string, kind int) {
 }
 
 func (a *App) NeedsUpdate(gameID string) bool {
-	a.refreshManifests(gameID)
-	files, err := a.filesToUpdate(gameID)
-	if err != nil {
-		a.logger.Errorf("Error checking for updates for %s: %v", gameID, err)
+	a.refreshVersion(gameID)
+	remote := a.versionInfo[gameID].Version
+	if remote == "" {
 		return false
 	}
-	return len(files) > 0
+	return remote != a.readLocalVersion(gameID)
 }
 
 func (a *App) appDirectory(gameID string) string {
@@ -391,47 +363,6 @@ func (a *App) appDirectory(gameID string) string {
 	return filepath.Join(configDir, appName)
 }
 
-func (a *App) filesToUpdate(gameID string) ([]File, error) {
-	var files []File
-	assets := a.assetsInfo[gameID]
-	client := a.clientInfo[gameID]
-	filesTocheck := append(assets.Files, client.Files...)
-
-	mutex := sync.Mutex{}
-	wg := sync.WaitGroup{}
-	wg.Add(len(filesTocheck))
-
-	for _, file := range filesTocheck {
-		go func(file File) {
-			defer wg.Done()
-
-			localFilePath := filepath.Join(a.appDirectory(gameID), file.LocalFile)
-			if !fileExists(localFilePath) {
-				a.logger.Infof("File %s does not exist", localFilePath)
-				mutex.Lock()
-				files = append(files, file)
-				mutex.Unlock()
-			} else {
-				localHash, err := sha256Sum(localFilePath)
-				if err != nil {
-					a.logger.Errorf("Error reading local file: %s\n", err)
-					return
-				}
-
-				if localHash != file.UnpackedHash {
-					a.logger.Infof("File %s has changed (local: %s, remote: %s)", localFilePath, string(localHash), file.UnpackedHash)
-					mutex.Lock()
-					files = append(files, file)
-					mutex.Unlock()
-				}
-			}
-		}(file)
-	}
-
-	wg.Wait()
-
-	return files, nil
-}
 
 func fileExists(path string) bool {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
@@ -540,52 +471,7 @@ func unzip(src, dst string) error {
 	return nil
 }
 
-func (a *App) downloadFile(url, gameID, dst string, progress bool) error {
-	a.logger.Infof("Downloading %s to %s", url, dst)
-	dst = filepath.Join(a.appDirectory(gameID), dst)
-	err := os.MkdirAll(filepath.Dir(dst), 0755)
-	if err != nil {
-		return err
-	}
 
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	resp, err := http.Get(url)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("download failed %s: HTTP %d", url, resp.StatusCode)
-	}
-
-	var reader io.Reader = resp.Body
-	if progress {
-		reader = io.TeeReader(reader, a)
-	}
-
-	if filepath.Ext(dst) != ".lzma" && filepath.Ext(url) == ".lzma" {
-		lzmaReader, err := lzma.NewReader(reader)
-		if err != nil {
-			return err
-		}
-		reader = lzmaReader
-	}
-
-	_, err = io.Copy(out, reader)
-	if err != nil {
-		return err
-	}
-
-	atomic.AddInt64(&a.downloadedFiles, 1)
-
-	return nil
-}
 
 func (a *App) localExecutable(gameID string) string {
 	name := "Contents/MacOS/client-local"
@@ -599,7 +485,7 @@ func (a *App) localExecutable(gameID string) string {
 }
 
 func (a *App) executable(gameID string) string {
-	return filepath.Join(a.appDirectory(gameID), a.clientInfo[gameID].Executable)
+	return filepath.Join(a.appDirectory(gameID), a.versionInfo[gameID].Executable)
 }
 
 func (a *App) Play(gameID string, local bool) {

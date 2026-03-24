@@ -153,10 +153,30 @@ def materialize_manifest_entry(src_root: Path, dst_root: Path, file_entry: dict)
     if src_local.exists():
         entry["unpackedhash"] = sha256_file(src_local)
         entry["unpackedsize"] = src_local.stat().st_size
-    entry["url"] = encode_url_path(entry["url"])
+    # NOTE: store raw (unencoded) url - app.go escapeURLPathSegments handles encoding at download time
     entry["packedhash"] = sha256_file(dst)
     entry["packedsize"] = dst.stat().st_size
     return entry, None
+
+
+def update_central_version_json(site_root: Path, game_id: str, executable: str) -> None:
+    """Maintain /launcher/version.json with one key per game.
+    Never overwrites existing version strings — admin controls those to trigger re-downloads.
+    Only creates the entry (with version '1.0') or updates the executable name if it changed."""
+    version_path = site_root / "version.json"
+    existing: dict = read_json(version_path) if version_path.exists() else {}
+    entry = existing.get(game_id, {})
+    changed = False
+    if not entry:
+        entry = {"version": "1.0", "executable": executable}
+        changed = True
+    elif entry.get("executable") != executable:
+        entry["executable"] = executable
+        changed = True
+    if changed:
+        existing[game_id] = entry
+        write_json(version_path, existing)
+        print(f"  Updated {version_path} [{game_id}]")
 
 
 def publish_tibia_windows(src_root: Path, site_root: Path) -> dict:
@@ -201,6 +221,7 @@ def publish_tibia_windows(src_root: Path, site_root: Path) -> dict:
     write_json(dst_root / "client.windows.json", client_manifest)
     write_json(dst_root / "assets.windows.json", assets_manifest)
     write_json(dst_root / "publish-skipped.json", {"client": skipped_client, "assets": skipped_assets})
+    update_central_version_json(site_root, "tibia1511", "bin/client.exe")
 
     return {
         "client_files": len(client_files),
@@ -245,7 +266,7 @@ def publish_generic_windows_client(src_root: Path, site_root: Path, game_id: str
         size = path.stat().st_size
         files.append(
             {
-                "url": encode_url_path(relative),
+                "url": relative,  # raw path - app.go escapeURLPathSegments handles encoding
                 "localfile": relative,
                 "packedhash": checksum,
                 "packedsize": size,
@@ -275,6 +296,7 @@ def publish_generic_windows_client(src_root: Path, site_root: Path, game_id: str
             legacy_linux.unlink()
     write_json(dst_root / "client.windows.json", client_manifest)
     write_json(dst_root / "assets.windows.json", assets_manifest)
+    update_central_version_json(site_root, game_id, executable_name)
 
     for stale_name in ("client.linux.json", "assets.linux.json"):
         stale_path = dst_root / stale_name
