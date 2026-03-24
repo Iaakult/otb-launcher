@@ -82,7 +82,7 @@
     updating = true;
   }
 
-  function update(game: GameId, launchAfterUpdate = false) {
+  function update(game: GameId) {
     beginProgress(game);
     void Update(game);
 
@@ -99,11 +99,6 @@
         updatingGame = "";
         clearInterval(interval);
         await refreshGameState(game);
-
-        if (launchAfterUpdate) {
-          ready = false;
-          Play(game, false);
-        }
       }
     }, 1000);
   }
@@ -120,7 +115,7 @@
   async function play(game: GameId) {
     const needsUpdate = await NeedsUpdate(game);
     if (needsUpdate) {
-      update(game, true);
+      update(game);
       return;
     }
 
@@ -179,10 +174,16 @@
             </button>
           {:else}
             <div class="row">
-              <button class="play" class:withLocal={hasLocal} disabled={!ready || updating} on:click={() => play(game.id)}>
+              <button
+                class="play"
+                class:withLocal={hasLocal}
+                class:needsUpdate={states[game.id].needsUpdate}
+                disabled={!ready || updating}
+                on:click={() => play(game.id)}
+              >
                 <PlayIcon />
                 {#if states[game.id].needsUpdate}
-                  Atualizar + Jogar
+                  Atualizar
                 {:else}
                   Play
                 {/if}
@@ -219,7 +220,7 @@
 
   <div class="global-status">
     {#if ready}
-      Atualizacoes verificadas automaticamente no Play.
+      Atualizacoes verificadas automaticamente ao abrir o launcher.
     {:else}
       Preparando launcher...
     {/if}
@@ -312,6 +313,11 @@
 
   button.play {
     background-color: #016f4e;
+  }
+
+  button.play.needsUpdate {
+    background-color: #f4b343;
+    color: #1b1b1b;
   }
 
   #logo {

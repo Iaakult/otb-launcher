@@ -244,6 +244,9 @@ func (a *App) Update(gameID string) {
 
 	zipURL := strings.TrimRight(a.baseURL, "/") + "/" + gameID + ".zip"
 	installDir := a.appDirectory(gameID)
+	characterDataDir := filepath.Join(installDir, "characterdata")
+	characterDataBackupDir := installDir + ".characterdata_backup"
+	preservedCharacterData := false
 
 	a.totalFiles = 1
 	a.totalBytes = 0
@@ -283,6 +286,16 @@ func (a *App) Update(gameID string) {
 		return
 	}
 
+	if fileExists(characterDataDir) {
+		_ = os.RemoveAll(characterDataBackupDir)
+		if err := os.Rename(characterDataDir, characterDataBackupDir); err != nil {
+			a.logger.Warnf("Failed to preserve characterdata: %v", err)
+		} else {
+			preservedCharacterData = true
+			a.logger.Infof("Preserved characterdata at %s", characterDataBackupDir)
+		}
+	}
+
 	a.logger.Infof("Clearing install dir %s", installDir)
 	if err := os.RemoveAll(installDir); err != nil {
 		a.logger.Errorf("Failed to clear install dir: %v", err)
@@ -297,6 +310,16 @@ func (a *App) Update(gameID string) {
 	if err := unzip(tmpPath, installDir); err != nil {
 		a.logger.Errorf("Failed to extract zip: %v", err)
 		return
+	}
+
+	if preservedCharacterData && fileExists(characterDataBackupDir) {
+		restoredCharacterDataDir := filepath.Join(installDir, "characterdata")
+		_ = os.RemoveAll(restoredCharacterDataDir)
+		if err := os.Rename(characterDataBackupDir, restoredCharacterDataDir); err != nil {
+			a.logger.Warnf("Failed to restore characterdata: %v", err)
+		} else {
+			a.logger.Infof("Restored characterdata to %s", restoredCharacterDataDir)
+		}
 	}
 
 	if err := a.saveLocalVersion(gameID, info.Version); err != nil {
@@ -494,7 +517,45 @@ func (a *App) executable(gameID string) string {
 	if exe == "" {
 		exe = defaultExecutables[gameID]
 	}
-	return filepath.Join(a.appDirectory(gameID), exe)
+
+	installDir := a.appDirectory(gameID)
+	direct := filepath.Join(installDir, exe)
+	if fileExists(direct) {
+		return direct
+	}
+
+	// Support zips that extract into a single nested root directory.
+	entries, err := os.ReadDir(installDir)
+	if err == nil {
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+			nested := filepath.Join(installDir, entry.Name(), exe)
+			if fileExists(nested) {
+				return nested
+			}
+		}
+	}
+
+	// Last-resort fallback: find by executable filename anywhere in installDir.
+	targetName := filepath.Base(exe)
+	found := ""
+	_ = filepath.Walk(installDir, func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil || info == nil || info.IsDir() {
+			return nil
+		}
+		if strings.EqualFold(info.Name(), targetName) {
+			found = path
+			return io.EOF
+		}
+		return nil
+	})
+	if found != "" {
+		return found
+	}
+
+	return direct
 }
 
 func (a *App) Play(gameID string, local bool) {
@@ -506,9 +567,13 @@ func (a *App) Play(gameID string, local bool) {
 	if local {
 		executable = a.localExecutable(gameID)
 	}
+	if !fileExists(executable) {
+		a.logger.Errorf("Executable not found: %s", executable)
+		return
+	}
 	a.logger.Infof("Launching %s", executable)
-	os.Chmod(a.executable(gameID), 0755)
-	if err := syscall.Exec(executable, []string{"--battleeye"}, os.Environ()); err != nil {
+	os.Chmod(executable, 0755)
+	if err := syscall.Exec(executable, []string{executable, "--battleeye"}, os.Environ()); err != nil {
 		a.logger.Errorf("Failed to launch %s: %s | attempting regular fork", executable, err)
 		cmd := exec.Command(executable, "--battleeye")
 		cmd.Stdout = os.Stdout
