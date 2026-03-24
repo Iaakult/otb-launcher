@@ -66,7 +66,7 @@
     liveUrl = await LiveURL();
     twitchChannel = extractTwitchChannel(liveUrl);
     if (twitchChannel) {
-      twitchEmbedUrl = `https://player.twitch.tv/?channel=${encodeURIComponent(twitchChannel)}&parent=localhost&autoplay=true&muted=true`;
+      twitchEmbedUrl = `https://player.twitch.tv/?channel=${encodeURIComponent(twitchChannel)}&parent=otbaiak.com&parent=localhost&parent=wails.localhost&autoplay=true&muted=true`;
     }
     hasLocal = await LocalEnabled();
     ready = true;
@@ -283,15 +283,16 @@
 
   .live-panel {
     position: absolute;
-    top: 8px;
-    right: 8px;
-    width: 260px;
-    height: 146px;
+    top: 20px;
+    right: 20px;
+    width: 350px;
+    height: 200px;
     padding: 0;
-    border: 1px solid rgba(255, 255, 255, 0.25);
-    border-radius: 10px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
     overflow: hidden;
     background: #0f1722;
+    z-index: 10;
   }
 
   .live-panel iframe {
