@@ -20,6 +20,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
+	"github.com/ulikunitz/xz/lzma"
 )
 
 // ZipVersionInfo is sourced from version.json on the server.
@@ -477,18 +478,30 @@ func unzip(src, dst string) error {
 			return err
 		}
 
-		out, err := os.Create(filepath.Join(dst, f.Name))
+		// If the file inside the zip ends with .lzma, decompress it and
+		// strip the extension so the extracted file is usable directly.
+		dstName := f.Name
+		var reader io.Reader = rc
+		if filepath.Ext(dstName) == ".lzma" {
+			dstName = strings.TrimSuffix(dstName, ".lzma")
+			lzmaReader, lzmaErr := lzma.NewReader(rc)
+			if lzmaErr == nil {
+				reader = lzmaReader
+			}
+		}
+
+		out, err := os.Create(filepath.Join(dst, dstName))
 		if err != nil {
+			rc.Close()
 			return err
 		}
 
-		_, err = io.Copy(out, rc)
-		if err != nil {
-			return err
-		}
-
+		_, err = io.Copy(out, reader)
 		out.Close()
 		rc.Close()
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
