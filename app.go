@@ -484,11 +484,24 @@ func (a *App) localExecutable(gameID string) string {
 	return filepath.Join(a.appDirectory(gameID), name)
 }
 
+var defaultExecutables = map[string]string{
+	"tibia1511": "bin/client.exe",
+	"otclient":  "OTBaiak OTC.exe",
+}
+
 func (a *App) executable(gameID string) string {
-	return filepath.Join(a.appDirectory(gameID), a.versionInfo[gameID].Executable)
+	exe := a.versionInfo[gameID].Executable
+	if exe == "" {
+		exe = defaultExecutables[gameID]
+	}
+	return filepath.Join(a.appDirectory(gameID), exe)
 }
 
 func (a *App) Play(gameID string, local bool) {
+	// Ensure versionInfo is populated so executable() has the right name.
+	if a.versionInfo[gameID].Executable == "" {
+		a.refreshVersion(gameID)
+	}
 	executable := a.executable(gameID)
 	if local {
 		executable = a.localExecutable(gameID)
