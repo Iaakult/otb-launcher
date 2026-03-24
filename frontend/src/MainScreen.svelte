@@ -54,6 +54,7 @@
   let liveUrl = "";
   let twitchChannel = "";
   let twitchEmbedUrl = "";
+  let liveIframeSrc = "https://www.google.com";
   let liveFrameLoaded = false;
   let liveFrameFailed = false;
   let liveFallbackTimer: ReturnType<typeof setTimeout> | null = null;
@@ -72,7 +73,10 @@
     console.log("Channel:", twitchChannel);
     if (twitchChannel) {
       twitchEmbedUrl = `https://player.twitch.tv/?channel=${encodeURIComponent(twitchChannel)}&parent=localhost&parent=wails.localhost&autoplay=true&muted=true`;
+      liveIframeSrc = twitchEmbedUrl;
       startLiveFallbackTimer();
+    } else {
+      liveFrameFailed = true;
     }
     hasLocal = await LocalEnabled();
     ready = true;
@@ -195,24 +199,22 @@
 </script>
 
 <div class="launcher-root">
-  {#if twitchEmbedUrl && liveUrl}
-    <button class="live-panel" on:click={() => openSocial(liveUrl)} aria-label="Abrir live na Twitch">
-      <iframe
-        src={twitchEmbedUrl}
-        width="100%"
-        height="100%"
-        frameborder="0"
-        allowfullscreen
-        title="Live Twitch"
-        on:load={handleLiveLoaded}
-        on:error={handleLiveError}
-      ></iframe>
-      <span class="live-label">AO VIVO</span>
-      {#if liveFrameFailed}
-        <div class="live-fallback">Live indisponivel - clique para assistir</div>
-      {/if}
-    </button>
-  {/if}
+  <button class="live-box" on:click={() => openSocial(liveUrl || "https://www.twitch.tv") } aria-label="Abrir live na Twitch">
+    <iframe
+      src={liveIframeSrc}
+      width="100%"
+      height="100%"
+      frameborder="0"
+      allowfullscreen
+      title="Live Twitch"
+      on:load={handleLiveLoaded}
+      on:error={handleLiveError}
+    ></iframe>
+    <span class="live-label">AO VIVO</span>
+    <div class="live-fallback" class:show={liveFrameFailed}>
+      Live indisponivel - clique para assistir
+    </div>
+  </button>
 
   <img alt="Logo" id="logo" src={logo} />
 
@@ -325,21 +327,21 @@
     position: relative;
   }
 
-  .live-panel {
+  .live-box {
     position: absolute;
     top: 20px;
     right: 20px;
     width: 350px;
     height: 200px;
     padding: 0;
+    background: red;
     border: 2px solid rgba(255, 255, 255, 0.2);
     border-radius: 12px;
     overflow: hidden;
-    background: #0f1722;
-    z-index: 10;
+    z-index: 9999;
   }
 
-  .live-panel iframe {
+  .live-box iframe {
     border: 0;
     pointer-events: none;
   }
@@ -360,7 +362,7 @@
   .live-fallback {
     position: absolute;
     inset: 0;
-    display: flex;
+    display: none;
     align-items: center;
     justify-content: center;
     text-align: center;
@@ -369,6 +371,10 @@
     font-weight: 700;
     background: rgba(5, 11, 28, 0.88);
     z-index: 1;
+  }
+
+  .live-fallback.show {
+    display: flex;
   }
 
   .progress-section {
