@@ -17,7 +17,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"syscall"
-	"path"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
@@ -484,14 +483,14 @@ func (a *App) downloadZip(url, gameID, dst string, progress bool) error {
 }
 
 func countZipFiles(src string) int64 {
-	r, err := zip.OpenReader(src)
+	reader, err := zip.OpenReader(src)
 	if err != nil {
 		return 1
 	}
-	defer r.Close()
+	defer reader.Close()
 	var count int64
-	for _, f := range r.File {
-		if !f.FileInfo().IsDir() {
+	for _, file := range reader.File {
+		if !file.FileInfo().IsDir() {
 			count++
 		}
 	}
@@ -501,47 +500,31 @@ func countZipFiles(src string) int64 {
 	return count
 }
 
-func sanitizeZipPath(dst, name string) (string, error) {
-	clean := filepath.Join(dst, filepath.FromSlash(path.Clean("/"+name)))
-	if !strings.HasPrefix(clean, filepath.Clean(dst)+string(os.PathSeparator)) && clean != filepath.Clean(dst) {
-		return "", fmt.Errorf("illegal zip path: %s", name)
-	}
-	return clean, nil
-}
-
 func unzip(src, dst string, onFile func()) error {
-	r, err := zip.OpenReader(src)
+	reader, err := zip.OpenReader(src)
 	if err != nil {
 		return err
 	}
-	defer r.Close()
+	defer reader.Close()
 
-	for _, f := range r.File {
-		if f.FileInfo().IsDir() {
-			dirPath, err := sanitizeZipPath(dst, f.Name)
-			if err != nil {
-				continue // skip bad paths
-			}
-			if err := os.MkdirAll(dirPath, 0755); err != nil {
+	for _, file := range reader.File {
+		if file.FileInfo().IsDir() {
+			if err := os.MkdirAll(filepath.Join(dst, file.Name), 0755); err != nil {
 				return err
 			}
 			continue
 		}
 
-		destPath, err := sanitizeZipPath(dst, f.Name)
-		if err != nil {
-			continue // skip bad paths
-		}
-		if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Join(dst, filepath.Dir(file.Name)), 0755); err != nil {
 			return err
 		}
 
-		rc, err := f.Open()
+		rc, err := file.Open()
 		if err != nil {
 			return err
 		}
 
-		out, err := os.Create(destPath)
+		out, err := os.Create(filepath.Join(dst, file.Name))
 		if err != nil {
 			rc.Close()
 			return err
