@@ -556,6 +556,24 @@ func (a *App) executable(gameID string) string {
 		return found
 	}
 
+	// If only compressed executable exists, return the expected decompressed path
+	// so ensureExecutableReady can inflate it.
+	targetCompressedName := targetName + ".lzma"
+	foundCompressed := ""
+	_ = filepath.Walk(installDir, func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil || info == nil || info.IsDir() {
+			return nil
+		}
+		if strings.EqualFold(info.Name(), targetCompressedName) {
+			foundCompressed = path
+			return io.EOF
+		}
+		return nil
+	})
+	if foundCompressed != "" {
+		return strings.TrimSuffix(foundCompressed, ".lzma")
+	}
+
 	return direct
 }
 
@@ -591,7 +609,28 @@ func (a *App) ensureExecutableReady(executable string) (string, error) {
 
 	compressed := executable + ".lzma"
 	if !fileExists(compressed) {
-		return executable, fmt.Errorf("executable not found (%s) and no compressed fallback (%s)", executable, compressed)
+		installDir := filepath.Dir(executable)
+		targetName := filepath.Base(executable)
+		targetCompressedName := targetName + ".lzma"
+
+		foundCompressed := ""
+		_ = filepath.Walk(installDir, func(path string, info os.FileInfo, walkErr error) error {
+			if walkErr != nil || info == nil || info.IsDir() {
+				return nil
+			}
+			if strings.EqualFold(info.Name(), targetCompressedName) {
+				foundCompressed = path
+				return io.EOF
+			}
+			return nil
+		})
+
+		if foundCompressed == "" {
+			return executable, fmt.Errorf("executable not found (%s) and no compressed fallback (%s)", executable, compressed)
+		}
+
+		compressed = foundCompressed
+		executable = strings.TrimSuffix(foundCompressed, ".lzma")
 	}
 
 	a.logger.Warnf("Executable missing, inflating %s -> %s", compressed, executable)
