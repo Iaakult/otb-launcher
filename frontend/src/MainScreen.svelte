@@ -157,23 +157,7 @@
 </script>
 
 <div class="launcher-root main-screen">
-  {#if twitchEmbedUrl && liveUrl}
-    <button class="live-box" on:click={() => openSocial(liveUrl)} aria-label="Abrir live na Twitch">
-      {#if liveDebugMode}
-        <div class="live-debug-box"></div>
-      {:else}
-        <iframe
-          src={twitchEmbedUrl}
-          width="100%"
-          height="100%"
-          frameborder="0"
-          allowfullscreen
-          title="Live Twitch"
-        ></iframe>
-      {/if}
-      <span class="live-label">AO VIVO</span>
-    </button>
-  {/if}
+  <div class="live-box">TESTE LIVE</div>
 
   <img alt="Logo" id="logo" src={logo} />
 
@@ -299,19 +283,10 @@
     padding: 0;
     border-radius: 12px;
     overflow: hidden;
-    background: #111;
-    z-index: 50;
-  }
-
-  .live-box iframe {
-    border: 0;
-    pointer-events: none;
-  }
-
-  .live-debug-box {
-    width: 100%;
-    height: 100%;
     background: red;
+    z-index: 50;
+    color: white;
+    font-weight: bold;
   }
 
   .live-label {
