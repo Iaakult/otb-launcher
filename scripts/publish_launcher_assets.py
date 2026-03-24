@@ -8,12 +8,13 @@ import shutil
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import quote
 
 
 DEFAULT_SITE_ROOT = Path("/var/www/html/launcher")
 DEFAULT_TIBIA_SRC = Path("/home/iaakult/Downloads/OTBaiak Client")
 DEFAULT_OTCLIENT_SRC = Path("/home/iaakult/Downloads/OTBaiak - OTC")
-DEFAULT_LAUNCHER_EXE = Path("/home/iaakult/client-repos/OTBaiak-Launcher/build/bin/OTBaiak.exe")
+DEFAULT_LAUNCHER_EXE = Path("/home/iaakult/otb-launcher/build/bin/OTBaiak-Launcher.exe")
 
 GENERIC_IGNORE_NAMES = {
     ".git",
@@ -22,6 +23,10 @@ GENERIC_IGNORE_NAMES = {
     "otclient.log",
     "packet.log",
 }
+
+
+def encode_url_path(path: str) -> str:
+    return "/".join(quote(part, safe="") for part in path.split("/"))
 
 
 def sha256_file(path: Path) -> str:
@@ -84,15 +89,46 @@ def carry_client_version(old_manifest: dict | None, new_manifest: dict, fallback
     return fallback
 
 
-def copy_launcher(launcher_exe: Path, site_root: Path) -> None:
+def copy_launcher(launcher_exe: Path, site_root: Path) -> list[str]:
     if not launcher_exe.exists():
         raise FileNotFoundError(f"Launcher executable not found: {launcher_exe}")
 
-    dst = site_root / "OTBaiak.exe"
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(launcher_exe, dst)
-    checksum = sha256_file(dst)
-    (site_root / "OTBaiak.exe.sha256").write_text(f"{checksum}  OTBaiak.exe\n")
+    published = []
+    for target_name in ("OTBaiak-Launcher.exe", "OTBaiak.exe"):
+        dst = site_root / target_name
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(launcher_exe, dst)
+        checksum = sha256_file(dst)
+        (site_root / f"{target_name}.sha256").write_text(f"{checksum}  {target_name}\n")
+        published.append(str(dst))
+
+    return published
+
+
+def resolve_launcher_exe(path: Path, site_root: Path) -> Path:
+    candidates = [
+        path,
+        path.with_name("OTBaiak.exe"),
+        path.with_name("OTBaiak-Launcher"),
+        path.with_name("OTBaiak"),
+        Path("/home/iaakult/client-repos/OTBaiak-Launcher/build/bin/OTBaiak-Launcher.exe"),
+        Path("/home/iaakult/client-repos/OTBaiak-Launcher/build/bin/OTBaiak.exe"),
+        Path("/home/iaakult/otb-launcher/build/bin/OTBaiak-Launcher.exe"),
+        Path("/home/iaakult/otb-launcher/build/bin/OTBaiak.exe"),
+        site_root / "OTBaiak-Launcher.exe",
+        site_root / "OTBaiak.exe",
+    ]
+
+    for candidate in candidates:
+        if candidate.exists() and candidate.is_file():
+            return candidate
+
+    searched = "\n - ".join(str(candidate) for candidate in candidates)
+    raise FileNotFoundError(
+        "Launcher executable not found. Checked:\n - "
+        + searched
+        + "\nUse --launcher-exe /caminho/para/arquivo.exe"
+    )
 
 
 def materialize_manifest_entry(src_root: Path, dst_root: Path, file_entry: dict) -> tuple[dict | None, dict | None]:
@@ -117,6 +153,7 @@ def materialize_manifest_entry(src_root: Path, dst_root: Path, file_entry: dict)
     if src_local.exists():
         entry["unpackedhash"] = sha256_file(src_local)
         entry["unpackedsize"] = src_local.stat().st_size
+    entry["url"] = encode_url_path(entry["url"])
     entry["packedhash"] = sha256_file(dst)
     entry["packedsize"] = dst.stat().st_size
     return entry, None
@@ -208,7 +245,7 @@ def publish_generic_windows_client(src_root: Path, site_root: Path, game_id: str
         size = path.stat().st_size
         files.append(
             {
-                "url": relative,
+                "url": encode_url_path(relative),
                 "localfile": relative,
                 "packedhash": checksum,
                 "packedsize": size,
@@ -272,8 +309,9 @@ def main() -> int:
     args.site_root.mkdir(parents=True, exist_ok=True)
 
     if not args.skip_launcher:
-        copy_launcher(args.launcher_exe, args.site_root)
-        summary["launcher"] = {"published": str(args.site_root / "OTBaiak.exe")}
+        launcher_exe = resolve_launcher_exe(args.launcher_exe, args.site_root)
+        published = copy_launcher(launcher_exe, args.site_root)
+        summary["launcher"] = {"published": published}
 
     if not args.skip_tibia:
         summary["tibia1511"] = publish_tibia_windows(args.tibia_src, args.site_root)

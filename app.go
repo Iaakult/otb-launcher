@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -142,9 +143,25 @@ func (a *App) gameBaseURL(gameID string) string {
 
 func (a *App) resolveDownloadURL(gameID, remotePath string) string {
 	if strings.HasPrefix(remotePath, "http://") || strings.HasPrefix(remotePath, "https://") {
-		return remotePath
+		parsed, err := url.Parse(remotePath)
+		if err != nil {
+			return remotePath
+		}
+		parsed.Path = escapeURLPathSegments(parsed.Path)
+		return parsed.String()
 	}
-	return a.gameBaseURL(gameID) + strings.TrimLeft(remotePath, "/")
+	return a.gameBaseURL(gameID) + escapeURLPathSegments(strings.TrimLeft(remotePath, "/"))
+}
+
+func escapeURLPathSegments(rawPath string) string {
+	parts := strings.Split(rawPath, "/")
+	for i, part := range parts {
+		if part == "" {
+			continue
+		}
+		parts[i] = url.PathEscape(part)
+	}
+	return strings.Join(parts, "/")
 }
 
 func (a *App) refreshManifests(gameID string) {
@@ -544,7 +561,7 @@ func (a *App) downloadFile(url, gameID, dst string, progress bool) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return err
+		return fmt.Errorf("download failed %s: HTTP %d", url, resp.StatusCode)
 	}
 
 	var reader io.Reader = resp.Body
