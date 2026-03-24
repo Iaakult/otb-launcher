@@ -8,7 +8,6 @@
     DownloadedBytes,
     DownloadedFiles,
     LocalEnabled,
-    LiveURL,
     NeedsUpdate,
     Play,
     Revision,
@@ -35,9 +34,6 @@
     { id: "tibia1511", name: "Tibia 15.11" },
     { id: "otclient", name: "OTClient" },
   ];
-  const fallbackLiveUrl = "https://www.twitch.tv/sirius_aknael";
-  const fallbackTwitchEmbedUrl = "https://player.twitch.tv/?channel=sirius_aknael&parent=localhost&parent=wails.localhost&autoplay=true&muted=true";
-
   export let openSettings: (gameId: GameId) => void;
 
   let updating = false;
@@ -53,10 +49,6 @@
 
   let hasLocal = false;
   let updateErrorMsg = "";
-  let liveUrl = "";
-  let twitchChannel = "";
-  let twitchEmbedUrl = "";
-  const liveDebugMode = false;
 
   let states: Record<GameId, GameState> = {
     tibia1511: { version: "", revision: 0, needsUpdate: false },
@@ -66,26 +58,9 @@
   onMount(async () => {
     await refreshGameState("tibia1511");
     await refreshGameState("otclient");
-    liveUrl = (await LiveURL()) || fallbackLiveUrl;
-    twitchChannel = extractTwitchChannel(liveUrl);
-    if (twitchChannel) {
-      twitchEmbedUrl = `https://player.twitch.tv/?channel=${encodeURIComponent(twitchChannel)}&parent=localhost&parent=wails.localhost&autoplay=true&muted=true`;
-    } else {
-      twitchEmbedUrl = fallbackTwitchEmbedUrl;
-    }
     hasLocal = await LocalEnabled();
     ready = true;
   });
-
-  function extractTwitchChannel(url: string): string {
-    try {
-      const parsed = new URL(url);
-      const parts = parsed.pathname.split("/").filter(Boolean);
-      return parts[0] ?? "";
-    } catch {
-      return "";
-    }
-  }
 
   async function refreshGameState(game: GameId) {
     const revision = await Revision(game);
@@ -161,18 +136,6 @@
 </script>
 
 <div class="launcher-root main-screen">
-  <button class="live-box" on:click={() => openSocial(liveUrl || fallbackLiveUrl)} aria-label="Abrir live na Twitch">
-    <iframe
-      src={twitchEmbedUrl || fallbackTwitchEmbedUrl}
-      width="100%"
-      height="100%"
-      frameborder="0"
-      allowfullscreen
-      title="Live Twitch"
-    ></iframe>
-    <span class="live-label">AO VIVO</span>
-  </button>
-
   <img alt="Logo" id="logo" src={logo} />
 
   <div class="socials">
@@ -280,46 +243,6 @@
 </div>
 
 <style>
-  .launcher-root {
-    position: relative;
-  }
-
-  .main-screen {
-    position: relative;
-  }
-
-  .live-box {
-    position: absolute;
-    top: 80px;
-    right: 40px;
-    width: 320px;
-    height: 180px;
-    padding: 0;
-    border-radius: 12px;
-    overflow: hidden;
-    background: #111;
-    z-index: 50;
-  }
-
-  .live-box iframe {
-    border: 0;
-    pointer-events: none;
-    background: #111;
-  }
-
-  .live-label {
-    position: absolute;
-    left: 8px;
-    top: 8px;
-    background: rgba(220, 32, 32, 0.9);
-    color: #fff;
-    font-size: 11px;
-    font-weight: 700;
-    padding: 2px 6px;
-    border-radius: 999px;
-    z-index: 2;
-  }
-
   .progress-section {
     display: flex;
     flex-direction: column;

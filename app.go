@@ -29,10 +29,6 @@ type ZipVersionInfo struct {
 	Executable string `json:"executable"`
 }
 
-type LauncherConfig struct {
-	Live string `json:"live"`
-}
-
 type GameProfile struct {
 	ID         string
 	Name       string
@@ -68,7 +64,6 @@ type App struct {
 	downloadedBytes int64
 	downloadedFiles int64
 	updateError     string
-	liveURL         string
 
 	parallel int
 
@@ -138,11 +133,6 @@ func (a *App) refreshVersion(gameID string) {
 	if err != nil {
 		a.logger.Errorf("Error reading version.json: %v", err)
 		return
-	}
-
-	var cfg LauncherConfig
-	if err := json.Unmarshal(body, &cfg); err == nil {
-		a.liveURL = strings.TrimSpace(cfg.Live)
 	}
 
 	var all map[string]json.RawMessage
@@ -224,13 +214,6 @@ func (a *App) DownloadedBytes() int64 {
 
 func (a *App) UpdateError() string {
 	return a.updateError
-}
-
-func (a *App) LiveURL() string {
-	if a.liveURL == "" {
-		a.refreshVersion("tibia1511")
-	}
-	return a.liveURL
 }
 
 func (a *App) ToggleLocal(value bool) {

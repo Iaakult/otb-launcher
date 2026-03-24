@@ -26,10 +26,6 @@ export function Exit() {
   return window['go']['main']['App']['Exit']();
 }
 
-export function LiveURL() {
-  return window['go']['main']['App']['LiveURL']();
-}
-
 export function LocalEnabled() {
   return window['go']['main']['App']['LocalEnabled']();
 }

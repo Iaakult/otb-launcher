@@ -13,8 +13,6 @@ export function DownloadedFiles():Promise<number>;
 
 export function Exit():Promise<void>;
 
-export function LiveURL():Promise<string>;
-
 export function LocalEnabled():Promise<boolean>;
 
 export function NeedsUpdate(arg1:string):Promise<boolean>;
