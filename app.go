@@ -20,7 +20,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
-	"github.com/ulikunitz/xz/lzma"
 )
 
 // ZipVersionInfo is sourced from version.json on the server.
@@ -556,93 +555,14 @@ func (a *App) executable(gameID string) string {
 		return found
 	}
 
-	// If only compressed executable exists, return the expected decompressed path
-	// so ensureExecutableReady can inflate it.
-	targetCompressedName := targetName + ".lzma"
-	foundCompressed := ""
-	_ = filepath.Walk(installDir, func(path string, info os.FileInfo, walkErr error) error {
-		if walkErr != nil || info == nil || info.IsDir() {
-			return nil
-		}
-		if strings.EqualFold(info.Name(), targetCompressedName) {
-			foundCompressed = path
-			return io.EOF
-		}
-		return nil
-	})
-	if foundCompressed != "" {
-		return strings.TrimSuffix(foundCompressed, ".lzma")
-	}
-
 	return direct
-}
-
-func inflateLZMAFile(src, dst string) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-
-	r, err := lzma.NewReader(in)
-	if err != nil {
-		return err
-	}
-
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	if _, err := io.Copy(out, r); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func (a *App) ensureExecutableReady(executable string) (string, error) {
 	if fileExists(executable) {
 		return executable, nil
 	}
-
-	compressed := executable + ".lzma"
-	if !fileExists(compressed) {
-		installDir := filepath.Dir(executable)
-		targetName := filepath.Base(executable)
-		targetCompressedName := targetName + ".lzma"
-
-		foundCompressed := ""
-		_ = filepath.Walk(installDir, func(path string, info os.FileInfo, walkErr error) error {
-			if walkErr != nil || info == nil || info.IsDir() {
-				return nil
-			}
-			if strings.EqualFold(info.Name(), targetCompressedName) {
-				foundCompressed = path
-				return io.EOF
-			}
-			return nil
-		})
-
-		if foundCompressed == "" {
-			return executable, fmt.Errorf("executable not found (%s) and no compressed fallback (%s)", executable, compressed)
-		}
-
-		compressed = foundCompressed
-		executable = strings.TrimSuffix(foundCompressed, ".lzma")
-	}
-
-	a.logger.Warnf("Executable missing, inflating %s -> %s", compressed, executable)
-	if err := inflateLZMAFile(compressed, executable); err != nil {
-		return executable, err
-	}
-
-	if err := os.Chmod(executable, 0755); err != nil {
-		a.logger.Warnf("Failed to set executable permission on %s: %v", executable, err)
-	}
-
-	return executable, nil
+	return executable, fmt.Errorf("executable not found: %s", executable)
 }
 
 func (a *App) Play(gameID string, local bool) {
