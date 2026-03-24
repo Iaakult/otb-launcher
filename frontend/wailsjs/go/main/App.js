@@ -26,6 +26,10 @@ export function Exit() {
   return window['go']['main']['App']['Exit']();
 }
 
+export function LiveURL() {
+  return window['go']['main']['App']['LiveURL']();
+}
+
 export function LocalEnabled() {
   return window['go']['main']['App']['LocalEnabled']();
 }
@@ -64,6 +68,10 @@ export function TotalFiles() {
 
 export function Update(arg1) {
   return window['go']['main']['App']['Update'](arg1);
+}
+
+export function UpdateError() {
+  return window['go']['main']['App']['UpdateError']();
 }
 
 export function Version(arg1) {

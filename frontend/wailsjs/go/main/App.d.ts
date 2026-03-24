@@ -13,6 +13,8 @@ export function DownloadedFiles():Promise<number>;
 
 export function Exit():Promise<void>;
 
+export function LiveURL():Promise<string>;
+
 export function LocalEnabled():Promise<boolean>;
 
 export function NeedsUpdate(arg1:string):Promise<boolean>;
@@ -32,6 +34,8 @@ export function TotalBytes():Promise<number>;
 export function TotalFiles():Promise<number>;
 
 export function Update(arg1:string):Promise<void>;
+
+export function UpdateError():Promise<string>;
 
 export function Version(arg1:string):Promise<string>;
 

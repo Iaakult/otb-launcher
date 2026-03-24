@@ -8,6 +8,7 @@
     DownloadedBytes,
     DownloadedFiles,
     LocalEnabled,
+    LiveURL,
     NeedsUpdate,
     Play,
     Revision,
@@ -50,6 +51,9 @@
 
   let hasLocal = false;
   let updateErrorMsg = "";
+  let liveUrl = "";
+  let twitchChannel = "";
+  let twitchEmbedUrl = "";
 
   let states: Record<GameId, GameState> = {
     tibia1511: { version: "", revision: 0, needsUpdate: false },
@@ -59,9 +63,24 @@
   onMount(async () => {
     await refreshGameState("tibia1511");
     await refreshGameState("otclient");
+    liveUrl = await LiveURL();
+    twitchChannel = extractTwitchChannel(liveUrl);
+    if (twitchChannel) {
+      twitchEmbedUrl = `https://player.twitch.tv/?channel=${encodeURIComponent(twitchChannel)}&parent=localhost&autoplay=true&muted=true`;
+    }
     hasLocal = await LocalEnabled();
     ready = true;
   });
+
+  function extractTwitchChannel(url: string): string {
+    try {
+      const parsed = new URL(url);
+      const parts = parsed.pathname.split("/").filter(Boolean);
+      return parts[0] ?? "";
+    } catch {
+      return "";
+    }
+  }
 
   async function refreshGameState(game: GameId) {
     const revision = await Revision(game);
@@ -123,14 +142,11 @@
       update(game);
       return;
     }
-
-    ready = false;
-    Play(game, false);
+    void Play(game, false);
   }
 
   function playLocal(game: GameId) {
-    ready = false;
-    Play(game, true);
+    void Play(game, true);
   }
 
   function openSocial(url: string) {
@@ -139,7 +155,21 @@
 
 </script>
 
-<div>
+<div class="launcher-root">
+  {#if twitchEmbedUrl && liveUrl}
+    <button class="live-panel" on:click={() => openSocial(liveUrl)} aria-label="Abrir live na Twitch">
+      <iframe
+        src={twitchEmbedUrl}
+        width="100%"
+        height="100%"
+        frameborder="0"
+        allowfullscreen
+        title="Live Twitch"
+      ></iframe>
+      <span class="live-label">AO VIVO</span>
+    </button>
+  {/if}
+
   <img alt="Logo" id="logo" src={logo} />
 
   <div class="socials">
@@ -228,9 +258,12 @@
   {#if updating}
     <div class="progress-section">
       <div class="progress-bar">
-        <div class="progress" style="width: {progress}%" />
-        <div class="active-download">{activeDownload}</div>
+        <div class="progress-fill" style="width: {progress}%"></div>
+        <span class="progress-text">{progress.toFixed(0)}%</span>
       </div>
+      {#if activeDownload}
+        <div class="active-download">{activeDownload}</div>
+      {/if}
     </div>
   {/if}
 
@@ -244,6 +277,40 @@
 </div>
 
 <style>
+  .launcher-root {
+    position: relative;
+  }
+
+  .live-panel {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 260px;
+    height: 146px;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 10px;
+    overflow: hidden;
+    background: #0f1722;
+  }
+
+  .live-panel iframe {
+    border: 0;
+    pointer-events: none;
+  }
+
+  .live-label {
+    position: absolute;
+    left: 8px;
+    top: 8px;
+    background: rgba(220, 32, 32, 0.9);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 999px;
+  }
+
   .progress-section {
     display: flex;
     flex-direction: column;
@@ -253,38 +320,43 @@
 
   div.progress-bar {
     position: relative;
-    align-items: start;
-    justify-content: start;
     width: 512px;
-    height: 32px;
-    background-color: #333333;
-    border-radius: 8px;
+    height: 20px;
+    background: #222;
+    border-radius: 10px;
     margin: 8px 0;
+    overflow: hidden;
   }
 
   .active-download {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
+    width: 512px;
     color: white;
     display: flex;
-    flex-direction: row;
-    align-items: center;
+    flex-direction: column;
     justify-content: center;
     font-size: 12px;
-    padding: 0 8px;
+    margin-top: 2px;
+    padding: 0 4px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .progress {
+  .progress-fill {
     height: 100%;
-    background-color: #016f4e;
-    border-radius: 8px;
+    background: linear-gradient(to right, #ff6600, #ff3300);
+    border-radius: 10px;
     transition: width 0.5s ease-in-out;
+  }
+
+  .progress-text {
+    position: absolute;
+    width: 100%;
+    text-align: center;
+    top: 0;
+    color: white;
+    font-weight: bold;
+    line-height: 20px;
   }
 
   div {

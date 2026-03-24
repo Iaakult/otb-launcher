@@ -16,10 +16,10 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
+	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // ZipVersionInfo is sourced from version.json on the server.
@@ -29,8 +29,9 @@ type ZipVersionInfo struct {
 	Executable string `json:"executable"`
 }
 
-// allVersions is the shape of /launcher/version.json — one key per gameID.
-type allVersions map[string]ZipVersionInfo
+type LauncherConfig struct {
+	Live string `json:"live"`
+}
 
 type GameProfile struct {
 	ID         string
@@ -67,6 +68,7 @@ type App struct {
 	downloadedBytes int64
 	downloadedFiles int64
 	updateError     string
+	liveURL         string
 
 	parallel int
 
@@ -105,7 +107,7 @@ func (a *App) OpenClientLocation(gameID string) {
 }
 
 func (a *App) Exit() {
-	os.Exit(0)
+	wailsRuntime.Quit(a.ctx)
 }
 
 func (a *App) gameBaseURL(gameID string) string {
@@ -132,15 +134,35 @@ func (a *App) refreshVersion(gameID string) {
 		a.logger.Errorf("version.json returned HTTP %d", resp.StatusCode)
 		return
 	}
-	var all allVersions
-	if err := json.NewDecoder(resp.Body).Decode(&all); err != nil {
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		a.logger.Errorf("Error reading version.json: %v", err)
+		return
+	}
+
+	var cfg LauncherConfig
+	if err := json.Unmarshal(body, &cfg); err == nil {
+		a.liveURL = strings.TrimSpace(cfg.Live)
+	}
+
+	var all map[string]json.RawMessage
+	if err := json.Unmarshal(body, &all); err != nil {
 		a.logger.Errorf("Error parsing version.json: %v", err)
 		return
 	}
-	if info, ok := all[gameID]; ok {
-		a.versionInfo[gameID] = info
-	} else {
+	entry, ok := all[gameID]
+	if !ok {
 		a.logger.Errorf("version.json has no entry for %s", gameID)
+		return
+	}
+
+	var info ZipVersionInfo
+	if err := json.Unmarshal(entry, &info); err != nil {
+		a.logger.Errorf("Error parsing game entry %s in version.json: %v", gameID, err)
+		return
+	}
+	if info.Version != "" {
+		a.versionInfo[gameID] = info
 	}
 }
 
@@ -202,6 +224,13 @@ func (a *App) DownloadedBytes() int64 {
 
 func (a *App) UpdateError() string {
 	return a.updateError
+}
+
+func (a *App) LiveURL() string {
+	if a.liveURL == "" {
+		a.refreshVersion("tibia1511")
+	}
+	return a.liveURL
 }
 
 func (a *App) ToggleLocal(value bool) {
@@ -631,16 +660,12 @@ func (a *App) Play(gameID string, local bool) {
 	}
 	a.logger.Infof("Launching %s", resolvedExecutable)
 	os.Chmod(resolvedExecutable, 0755)
-	if err := syscall.Exec(resolvedExecutable, []string{resolvedExecutable, "--battleeye"}, os.Environ()); err != nil {
-		a.logger.Errorf("Failed to launch %s: %s | attempting regular fork", resolvedExecutable, err)
-		cmd := exec.Command(resolvedExecutable, "--battleeye")
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		cmd.Env = os.Environ()
-		if err := cmd.Start(); err != nil {
-			a.logger.Errorf("Failed to launch %s: %s", resolvedExecutable, err)
-		}
-		os.Exit(0)
+	cmd := exec.Command(resolvedExecutable, "--battleeye")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Env = os.Environ()
+	if err := cmd.Start(); err != nil {
+		a.logger.Errorf("Failed to launch %s: %s", resolvedExecutable, err)
 	}
 }
 
