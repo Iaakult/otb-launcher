@@ -20,7 +20,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
-	"github.com/ulikunitz/xz/lzma"
 )
 
 // ZipVersionInfo is sourced from version.json on the server.
@@ -171,6 +170,12 @@ func (a *App) Revision(gameID string) int {
 
 func (a *App) DownloadPercent() float64 {
 	if a.totalBytes == 0 {
+		// Extraction phase: report file-based progress
+		if a.totalFiles > 0 {
+			pct := float64(atomic.LoadInt64(&a.downloadedFiles)) / float64(a.totalFiles) * 100
+			a.logger.Infof("Extracting %d/%d files (%.2f%%)", a.downloadedFiles, a.totalFiles, pct)
+			return pct
+		}
 		return 0
 	}
 	percent := float64(a.downloadedBytes) / float64(a.totalBytes) * 100
@@ -308,7 +313,15 @@ func (a *App) Update(gameID string) {
 	}
 
 	a.logger.Infof("Extracting zip to %s", installDir)
-	if err := unzip(tmpPath, installDir); err != nil {
+	// Count files in zip so the UI can show extraction progress
+	fileCount := countZipFiles(tmpPath)
+	a.totalFiles = fileCount
+	a.downloadedFiles = 0
+	a.totalBytes = 0
+	a.downloadedBytes = 0
+	if err := unzip(tmpPath, installDir, func() {
+		atomic.AddInt64(&a.downloadedFiles, 1)
+	}); err != nil {
 		a.logger.Errorf("Failed to extract zip: %v", err)
 		return
 	}
@@ -328,7 +341,7 @@ func (a *App) Update(gameID string) {
 		return
 	}
 
-	a.downloadedFiles = 1
+	a.downloadedFiles = a.totalFiles
 	a.logger.Infof("Update complete for %s → version %s", gameID, info.Version)
 }
 
@@ -452,7 +465,25 @@ func (a *App) downloadZip(url, gameID, dst string, progress bool) error {
 	return nil
 }
 
-func unzip(src, dst string) error {
+func countZipFiles(src string) int64 {
+	r, err := zip.OpenReader(src)
+	if err != nil {
+		return 1
+	}
+	defer r.Close()
+	var count int64
+	for _, f := range r.File {
+		if !f.FileInfo().IsDir() {
+			count++
+		}
+	}
+	if count == 0 {
+		return 1
+	}
+	return count
+}
+
+func unzip(src, dst string, onFile func()) error {
 	r, err := zip.OpenReader(src)
 	if err != nil {
 		return err
@@ -478,29 +509,20 @@ func unzip(src, dst string) error {
 			return err
 		}
 
-		// If the file inside the zip ends with .lzma, decompress it and
-		// strip the extension so the extracted file is usable directly.
-		dstName := f.Name
-		var reader io.Reader = rc
-		if filepath.Ext(dstName) == ".lzma" {
-			dstName = strings.TrimSuffix(dstName, ".lzma")
-			lzmaReader, lzmaErr := lzma.NewReader(rc)
-			if lzmaErr == nil {
-				reader = lzmaReader
-			}
-		}
-
-		out, err := os.Create(filepath.Join(dst, dstName))
+		out, err := os.Create(filepath.Join(dst, f.Name))
 		if err != nil {
 			rc.Close()
 			return err
 		}
 
-		_, err = io.Copy(out, reader)
+		_, err = io.Copy(out, rc)
 		out.Close()
 		rc.Close()
 		if err != nil {
 			return err
+		}
+		if onFile != nil {
+			onFile()
 		}
 	}
 
@@ -574,10 +596,6 @@ func (a *App) executable(gameID string) string {
 func (a *App) ensureExecutableReady(executable string) (string, error) {
 	if fileExists(executable) {
 		return executable, nil
-	}
-	compressed := executable + ".lzma"
-	if fileExists(compressed) {
-		return executable, fmt.Errorf("executable not found: %s (found compressed file %s). This launcher no longer supports .lzma runtime files; publish a runnable zip with real .exe/.dll files", executable, compressed)
 	}
 	return executable, fmt.Errorf("executable not found: %s", executable)
 }
