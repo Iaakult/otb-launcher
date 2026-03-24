@@ -19,7 +19,7 @@
     Version,
   } from "../wailsjs/go/main/App.js";
   import { BrowserOpenURL } from "../wailsjs/runtime/runtime";
-  import { onDestroy, onMount } from "svelte";
+  import { onMount } from "svelte";
   import PlayIcon from "./PlayIcon.svelte";
   import SettingsIcon from "./SettingsIcon.svelte";
 
@@ -54,10 +54,6 @@
   let liveUrl = "";
   let twitchChannel = "";
   let twitchEmbedUrl = "";
-  let liveIframeSrc = "about:blank";
-  let liveFrameLoaded = false;
-  let liveFrameFailed = false;
-  let liveFallbackTimer: ReturnType<typeof setTimeout> | null = null;
 
   let states: Record<GameId, GameState> = {
     tibia1511: { version: "", revision: 0, needsUpdate: false },
@@ -69,52 +65,12 @@
     await refreshGameState("otclient");
     liveUrl = await LiveURL();
     twitchChannel = extractTwitchChannel(liveUrl);
-    console.log("Live URL:", liveUrl);
-    console.log("Channel:", twitchChannel);
     if (twitchChannel) {
       twitchEmbedUrl = `https://player.twitch.tv/?channel=${encodeURIComponent(twitchChannel)}&parent=localhost&parent=wails.localhost&autoplay=true&muted=true`;
-      liveIframeSrc = twitchEmbedUrl;
-      startLiveFallbackTimer();
-    } else {
-      liveIframeSrc = "about:blank";
-      liveFrameFailed = true;
     }
     hasLocal = await LocalEnabled();
     ready = true;
   });
-
-  onDestroy(() => {
-    clearLiveFallbackTimer();
-  });
-
-  function clearLiveFallbackTimer() {
-    if (liveFallbackTimer) {
-      clearTimeout(liveFallbackTimer);
-      liveFallbackTimer = null;
-    }
-  }
-
-  function startLiveFallbackTimer() {
-    liveFrameLoaded = false;
-    liveFrameFailed = false;
-    clearLiveFallbackTimer();
-    liveFallbackTimer = setTimeout(() => {
-      if (!liveFrameLoaded) {
-        liveFrameFailed = true;
-      }
-    }, 8000);
-  }
-
-  function handleLiveLoaded() {
-    liveFrameLoaded = true;
-    liveFrameFailed = false;
-    clearLiveFallbackTimer();
-  }
-
-  function handleLiveError() {
-    liveFrameFailed = true;
-    clearLiveFallbackTimer();
-  }
 
   function extractTwitchChannel(url: string): string {
     try {
@@ -199,29 +155,22 @@
 
 </script>
 
-<div class="main-screen">
-  <div class="top-bar">
-    <img alt="Logo" id="logo" class="logo" src={logo} />
-
-    <button class="live-box" on:click={() => openSocial(liveUrl || "https://www.twitch.tv") } aria-label="Abrir live na Twitch">
+<div class="launcher-root">
+  {#if twitchEmbedUrl && liveUrl}
+    <button class="live-panel" on:click={() => openSocial(liveUrl)} aria-label="Abrir live na Twitch">
       <iframe
-        src={liveIframeSrc}
+        src={twitchEmbedUrl}
         width="100%"
         height="100%"
         frameborder="0"
         allowfullscreen
         title="Live Twitch"
-        on:load={handleLiveLoaded}
-        on:error={handleLiveError}
       ></iframe>
       <span class="live-label">AO VIVO</span>
-      <div class="live-fallback" class:show={liveFrameFailed}>
-        <span>AO VIVO</span>
-        <br />
-        Clique para assistir
-      </div>
     </button>
-  </div>
+  {/if}
+
+  <img alt="Logo" id="logo" src={logo} />
 
   <div class="socials">
     <button
@@ -328,33 +277,26 @@
 </div>
 
 <style>
-  .main-screen {
+  .launcher-root {
     position: relative;
   }
 
-  .top-bar {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 20px;
-    margin-top: 20px;
-    flex-wrap: wrap;
-  }
-
-  .live-box {
+  .live-panel {
+    position: absolute;
+    top: 8px;
+    right: 8px;
     width: 260px;
-    height: 150px;
+    height: 146px;
     padding: 0;
-    background: #111;
+    border: 1px solid rgba(255, 255, 255, 0.25);
     border-radius: 10px;
     overflow: hidden;
+    background: #0f1722;
   }
 
-  .live-box iframe {
-    display: block;
+  .live-panel iframe {
     border: 0;
     pointer-events: none;
-    background: #111;
   }
 
   .live-label {
@@ -368,26 +310,6 @@
     padding: 2px 6px;
     border-radius: 999px;
     z-index: 2;
-  }
-
-  .live-fallback {
-    position: absolute;
-    inset: 0;
-    display: none;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding: 12px;
-    color: #fff;
-    font-weight: 700;
-    background: rgba(5, 11, 28, 0.88);
-    z-index: 1;
-    line-height: 1.5;
-  }
-
-  .live-fallback.show {
-    display: flex;
   }
 
   .progress-section {
@@ -491,17 +413,12 @@
     display: block;
     width: 132px;
     height: 132px;
-    margin: 0;
-    padding: 0;
+    margin: auto;
+    padding: 3% 0 0;
     background-position: center;
     background-repeat: no-repeat;
     background-size: 100% 100%;
     background-origin: content-box;
-  }
-
-  .logo {
-    height: 120px;
-    width: auto;
   }
 
   .socials {
@@ -576,11 +493,6 @@
     gap: 8px;
   }
 
-  @media (max-width: 720px) {
-    .top-bar {
-      gap: 12px;
-    }
-  }
   .status-line {
     font-size: 12px;
     color: #dae0ef;
@@ -612,11 +524,5 @@
     margin-top: 6px;
     font-size: 12px;
     color: #dae0ef;
-  }
-
-  @media (max-width: 980px) {
-    .play-grid {
-      grid-template-columns: 1fr;
-    }
   }
 </style>
