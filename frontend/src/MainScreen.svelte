@@ -35,6 +35,8 @@
     { id: "tibia1511", name: "Tibia 15.11" },
     { id: "otclient", name: "OTClient" },
   ];
+  const fallbackLiveUrl = "https://www.twitch.tv/sirius_aknael";
+  const fallbackTwitchEmbedUrl = "https://player.twitch.tv/?channel=sirius_aknael&parent=localhost&parent=wails.localhost&autoplay=true&muted=true";
 
   export let openSettings: (gameId: GameId) => void;
 
@@ -64,10 +66,12 @@
   onMount(async () => {
     await refreshGameState("tibia1511");
     await refreshGameState("otclient");
-    liveUrl = await LiveURL();
+    liveUrl = (await LiveURL()) || fallbackLiveUrl;
     twitchChannel = extractTwitchChannel(liveUrl);
     if (twitchChannel) {
       twitchEmbedUrl = `https://player.twitch.tv/?channel=${encodeURIComponent(twitchChannel)}&parent=localhost&parent=wails.localhost&autoplay=true&muted=true`;
+    } else {
+      twitchEmbedUrl = fallbackTwitchEmbedUrl;
     }
     hasLocal = await LocalEnabled();
     ready = true;
@@ -157,7 +161,17 @@
 </script>
 
 <div class="launcher-root main-screen">
-  <div class="live-box">TESTE LIVE</div>
+  <button class="live-box" on:click={() => openSocial(liveUrl || fallbackLiveUrl)} aria-label="Abrir live na Twitch">
+    <iframe
+      src={twitchEmbedUrl || fallbackTwitchEmbedUrl}
+      width="100%"
+      height="100%"
+      frameborder="0"
+      allowfullscreen
+      title="Live Twitch"
+    ></iframe>
+    <span class="live-label">AO VIVO</span>
+  </button>
 
   <img alt="Logo" id="logo" src={logo} />
 
@@ -283,10 +297,14 @@
     padding: 0;
     border-radius: 12px;
     overflow: hidden;
-    background: red;
+    background: #111;
     z-index: 50;
-    color: white;
-    font-weight: bold;
+  }
+
+  .live-box iframe {
+    border: 0;
+    pointer-events: none;
+    background: #111;
   }
 
   .live-label {
