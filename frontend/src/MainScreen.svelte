@@ -54,6 +54,7 @@
   let liveUrl = "";
   let twitchChannel = "";
   let twitchEmbedUrl = "";
+  const liveDebugMode = false;
 
   let states: Record<GameId, GameState> = {
     tibia1511: { version: "", revision: 0, needsUpdate: false },
@@ -155,17 +156,21 @@
 
 </script>
 
-<div class="launcher-root">
+<div class="launcher-root main-screen">
   {#if twitchEmbedUrl && liveUrl}
-    <button class="live-panel" on:click={() => openSocial(liveUrl)} aria-label="Abrir live na Twitch">
-      <iframe
-        src={twitchEmbedUrl}
-        width="100%"
-        height="100%"
-        frameborder="0"
-        allowfullscreen
-        title="Live Twitch"
-      ></iframe>
+    <button class="live-box" on:click={() => openSocial(liveUrl)} aria-label="Abrir live na Twitch">
+      {#if liveDebugMode}
+        <div class="live-debug-box"></div>
+      {:else}
+        <iframe
+          src={twitchEmbedUrl}
+          width="100%"
+          height="100%"
+          frameborder="0"
+          allowfullscreen
+          title="Live Twitch"
+        ></iframe>
+      {/if}
       <span class="live-label">AO VIVO</span>
     </button>
   {/if}
@@ -281,22 +286,32 @@
     position: relative;
   }
 
-  .live-panel {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    width: 260px;
-    height: 146px;
-    padding: 0;
-    border: 1px solid rgba(255, 255, 255, 0.25);
-    border-radius: 10px;
-    overflow: hidden;
-    background: #0f1722;
+  .main-screen {
+    position: relative;
   }
 
-  .live-panel iframe {
+  .live-box {
+    position: absolute;
+    top: 80px;
+    right: 40px;
+    width: 320px;
+    height: 180px;
+    padding: 0;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #111;
+    z-index: 50;
+  }
+
+  .live-box iframe {
     border: 0;
     pointer-events: none;
+  }
+
+  .live-debug-box {
+    width: 100%;
+    height: 100%;
+    background: red;
   }
 
   .live-label {
