@@ -200,26 +200,28 @@
 </script>
 
 <div class="main-screen">
-  <button class="live-box" on:click={() => openSocial(liveUrl || "https://www.twitch.tv") } aria-label="Abrir live na Twitch">
-    <iframe
-      src={liveIframeSrc}
-      width="100%"
-      height="100%"
-      frameborder="0"
-      allowfullscreen
-      title="Live Twitch"
-      on:load={handleLiveLoaded}
-      on:error={handleLiveError}
-    ></iframe>
-    <span class="live-label">AO VIVO</span>
-    <div class="live-fallback" class:show={liveFrameFailed}>
-      <span>AO VIVO</span>
-      <br />
-      Clique para assistir
-    </div>
-  </button>
+  <div class="top-bar">
+    <img alt="Logo" id="logo" class="logo" src={logo} />
 
-  <img alt="Logo" id="logo" src={logo} />
+    <button class="live-box" on:click={() => openSocial(liveUrl || "https://www.twitch.tv") } aria-label="Abrir live na Twitch">
+      <iframe
+        src={liveIframeSrc}
+        width="100%"
+        height="100%"
+        frameborder="0"
+        allowfullscreen
+        title="Live Twitch"
+        on:load={handleLiveLoaded}
+        on:error={handleLiveError}
+      ></iframe>
+      <span class="live-label">AO VIVO</span>
+      <div class="live-fallback" class:show={liveFrameFailed}>
+        <span>AO VIVO</span>
+        <br />
+        Clique para assistir
+      </div>
+    </button>
+  </div>
 
   <div class="socials">
     <button
@@ -328,31 +330,24 @@
 <style>
   .main-screen {
     position: relative;
-    width: 100%;
-    min-height: 100%;
-    padding: 0 20px 20px;
-    box-sizing: border-box;
+  }
+
+  .top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    margin-top: 20px;
+    flex-wrap: wrap;
   }
 
   .live-box {
-    position: absolute;
-    top: 20px;
-    right: 20px;
-    width: 350px;
-    height: 200px;
+    width: 260px;
+    height: 150px;
     padding: 0;
     background: #111;
-    border: 2px solid rgba(255, 255, 255, 0.1);
-    border-radius: 12px;
+    border-radius: 10px;
     overflow: hidden;
-    z-index: 9999;
-    box-shadow: 0 0 20px rgba(255, 0, 0, 0.3);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-  }
-
-  .live-box:hover {
-    transform: scale(1.02);
-    box-shadow: 0 0 25px rgba(255, 0, 0, 0.5);
   }
 
   .live-box iframe {
@@ -404,8 +399,7 @@
 
   div.progress-bar {
     position: relative;
-    width: 100%;
-    max-width: 512px;
+    width: 512px;
     height: 20px;
     background: #222;
     border-radius: 10px;
@@ -414,8 +408,7 @@
   }
 
   .active-download {
-    width: 100%;
-    max-width: 512px;
+    width: 512px;
     color: white;
     display: flex;
     flex-direction: column;
@@ -498,12 +491,17 @@
     display: block;
     width: 132px;
     height: 132px;
-    margin: auto;
-    padding: 3% 0 0;
+    margin: 0;
+    padding: 0;
     background-position: center;
     background-repeat: no-repeat;
     background-size: 100% 100%;
     background-origin: content-box;
+  }
+
+  .logo {
+    height: 120px;
+    width: auto;
   }
 
   .socials {
@@ -511,8 +509,6 @@
     flex-direction: row;
     gap: 8px;
     margin: 8px 0;
-    width: 100%;
-    justify-content: center;
   }
 
   .social {
@@ -536,9 +532,6 @@
     align-items: start;
     gap: 12px;
     width: 100%;
-    justify-content: center;
-    box-sizing: border-box;
-    padding-right: 390px;
   }
 
   .play-grid {
@@ -583,6 +576,11 @@
     gap: 8px;
   }
 
+  @media (max-width: 720px) {
+    .top-bar {
+      gap: 12px;
+    }
+  }
   .status-line {
     font-size: 12px;
     color: #dae0ef;
@@ -617,22 +615,6 @@
   }
 
   @media (max-width: 980px) {
-    .main-screen {
-      padding: 12px;
-    }
-
-    .live-box {
-      position: relative;
-      top: auto;
-      right: auto;
-      width: min(100%, 350px);
-      margin: 8px auto 16px;
-    }
-
-    .actions {
-      padding-right: 0;
-    }
-
     .play-grid {
       grid-template-columns: 1fr;
     }
