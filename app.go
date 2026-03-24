@@ -455,7 +455,7 @@ func (a *App) downloadZip(url, gameID, dst string, progress bool) error {
 	}
 	out.Close()
 
-	err = unzip(out.Name(), filepath.Dir(dst))
+	err = unzip(out.Name(), filepath.Dir(dst), nil)
 	if err != nil {
 		return err
 	}
