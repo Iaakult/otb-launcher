@@ -29,7 +29,7 @@ Este launcher usa um fluxo simples de atualizacao por ZIP.
 ## Cliente publicado
 
 - O launcher distribui apenas o cliente `otclient`.
-- Na interface, esse cliente aparece como `OTBClient`.
+- Na interface, esse cliente aparece como `OTBaiak Client`.
 
 ## Observacao operacional
 

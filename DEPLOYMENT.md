@@ -35,7 +35,7 @@ Crie os arquivos dentro de ./html/launcher com esta estrutura:
 ## Cliente ativo
 
 - O unico cliente mantido pelo launcher e o `otclient`.
-- Na interface do launcher, ele aparece como `OTBClient`.
+- Na interface do launcher, ele aparece como `OTBaiak Client`.
 
 ## Fluxo no launcher
 

@@ -31,7 +31,7 @@
   };
 
   const games: Array<{ id: GameId; name: string }> = [
-    { id: "otclient", name: "OTBClient" },
+    { id: "otclient", name: "OTBaiak Client" },
   ];
   export let openSettings: () => void;
 
@@ -373,29 +373,27 @@
 
   .actions {
     display: flex;
-    flex-direction: row;
-    align-items: start;
-    gap: 12px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
     width: 100%;
   }
 
   .play-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
     gap: 8px;
+    justify-items: center;
   }
 
   .game-card {
     background: rgba(5, 11, 28, 0.8);
     border: 1px solid rgba(255, 255, 255, 0.2);
     border-radius: 10px;
-    padding: 8px;
-    min-width: 250px;
+    padding: 12px;
+    min-width: 320px;
+    max-width: 320px;
     gap: 6px;
-  }
-
-  .game-card small {
-    color: #d3dae8;
   }
 
   h3 {

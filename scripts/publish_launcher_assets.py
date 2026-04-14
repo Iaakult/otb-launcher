@@ -151,7 +151,7 @@ def publish_game_zip(src_root: Path, site_root: Path, game_id: str, executable_n
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Publish the launcher and OTBClient zip to the website repo.")
+    parser = argparse.ArgumentParser(description="Publish the launcher and OTBaiak Client zip to the website repo.")
     parser.add_argument("--site-root", type=Path, default=DEFAULT_SITE_ROOT)
     parser.add_argument("--otclient-src", type=Path, default=DEFAULT_OTCLIENT_SRC)
     parser.add_argument("--launcher-exe", type=Path, default=DEFAULT_LAUNCHER_EXE)

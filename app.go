@@ -39,9 +39,9 @@ type GameProfile struct {
 var gameProfiles = map[string]GameProfile{
 	"otclient": {
 		ID:         "otclient",
-		Name:       "OTBClient",
+		Name:       "OTBaiak Client",
 		RemotePath: "otclient",
-		InstallDir: "OTBClient",
+		InstallDir: "OTBaiak Client",
 	},
 }
 

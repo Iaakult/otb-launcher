@@ -23,7 +23,7 @@
 </button>
 <div>
   <h1>Settings</h1>
-  <small>Cliente selecionado: OTBClient</small>
+  <small>Cliente selecionado: OTBaiak Client</small>
   <button class="client" on:click={openClientLocation}>Open client location</button>
 
   <label>
