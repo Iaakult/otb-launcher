@@ -10,17 +10,12 @@ Crie os arquivos dentro de ./html/launcher com esta estrutura:
 - ./html/launcher/OTBaiak-Launcher.exe
 - ./html/launcher/OTBaiak-Launcher.exe.sha256
 - ./html/launcher/version.json
-- ./html/launcher/tibia1511.zip
 - ./html/launcher/otclient.zip
 
 ## Formato do version.json
 
 ```json
 {
-  "tibia1511": {
-    "version": "1.0",
-    "executable": "bin/client.exe"
-  },
   "otclient": {
     "version": "1.0",
     "executable": "OTBaiak OTC.exe"
@@ -30,12 +25,17 @@ Crie os arquivos dentro de ./html/launcher com esta estrutura:
 
 ## Regras do pacote
 
-- O launcher baixa apenas `gameID.zip`.
+- O launcher baixa apenas `otclient.zip`.
 - O ZIP deve conter os arquivos finais prontos para rodar.
 - Nao use `.lzma` dentro do ZIP.
 - Nao use manifests de assets.
 - Nao use patch incremental.
 - O launcher preserva apenas a pasta `characterdata` durante update.
+
+## Cliente ativo
+
+- O unico cliente mantido pelo launcher e o `otclient`.
+- Na interface do launcher, ele aparece como `OTBClient`.
 
 ## Fluxo no launcher
 

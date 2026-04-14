@@ -9,7 +9,6 @@ from pathlib import Path
 
 
 DEFAULT_SITE_ROOT = Path("/var/www/html/launcher")
-DEFAULT_TIBIA_SRC = Path("/home/iaakult/Downloads/OTBaiak Client")
 DEFAULT_OTCLIENT_SRC = Path("/home/iaakult/Downloads/OTBaiak - OTC")
 DEFAULT_LAUNCHER_EXE = Path("/home/iaakult/otb-launcher/build/bin/OTBaiak-Launcher.exe")
 
@@ -121,6 +120,10 @@ def cleanup_legacy_layout(site_root: Path, game_id: str) -> None:
     if legacy_dir.exists() and legacy_dir.is_dir():
         shutil.rmtree(legacy_dir)
 
+    legacy_zip = site_root / f"{game_id}.zip"
+    if legacy_zip.exists() and legacy_zip.is_file():
+        legacy_zip.unlink()
+
 
 def update_central_version_json(site_root: Path, game_id: str, executable: str) -> None:
     version_path = site_root / "version.json"
@@ -148,13 +151,11 @@ def publish_game_zip(src_root: Path, site_root: Path, game_id: str, executable_n
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Publish OTBaiak launcher and game zips to the website repo.")
+    parser = argparse.ArgumentParser(description="Publish the launcher and OTBClient zip to the website repo.")
     parser.add_argument("--site-root", type=Path, default=DEFAULT_SITE_ROOT)
-    parser.add_argument("--tibia-src", type=Path, default=DEFAULT_TIBIA_SRC)
     parser.add_argument("--otclient-src", type=Path, default=DEFAULT_OTCLIENT_SRC)
     parser.add_argument("--launcher-exe", type=Path, default=DEFAULT_LAUNCHER_EXE)
     parser.add_argument("--skip-launcher", action="store_true")
-    parser.add_argument("--skip-tibia", action="store_true")
     parser.add_argument("--skip-otclient", action="store_true")
     return parser
 
@@ -171,14 +172,6 @@ def main() -> int:
         published = copy_launcher(launcher_exe, args.site_root)
         summary["launcher"] = {"published": published}
 
-    if not args.skip_tibia:
-        summary["tibia1511"] = publish_game_zip(
-            args.tibia_src,
-            args.site_root,
-            "tibia1511",
-            "bin/client.exe",
-        )
-
     if not args.skip_otclient:
         summary["otclient"] = publish_game_zip(
             args.otclient_src,
@@ -186,6 +179,14 @@ def main() -> int:
             "otclient",
             "OTBaiak OTC.exe",
         )
+
+    cleanup_legacy_layout(args.site_root, "tibia1511")
+
+    version_path = args.site_root / "version.json"
+    if version_path.exists():
+        version_payload = read_json(version_path)
+        if version_payload.pop("tibia1511", None) is not None:
+            write_json(version_path, version_payload)
 
     print(json.dumps(summary, indent=2))
     return 0

@@ -22,7 +22,7 @@
   import PlayIcon from "./PlayIcon.svelte";
   import SettingsIcon from "./SettingsIcon.svelte";
 
-  type GameId = "tibia1511" | "otclient";
+  type GameId = "otclient";
 
   type GameState = {
     version: string;
@@ -31,10 +31,9 @@
   };
 
   const games: Array<{ id: GameId; name: string }> = [
-    { id: "tibia1511", name: "Tibia 15.11" },
-    { id: "otclient", name: "OTClient" },
+    { id: "otclient", name: "OTBClient" },
   ];
-  export let openSettings: (gameId: GameId) => void;
+  export let openSettings: () => void;
 
   let updating = false;
   let ready = false;
@@ -51,12 +50,10 @@
   let updateErrorMsg = "";
 
   let states: Record<GameId, GameState> = {
-    tibia1511: { version: "", revision: 0, needsUpdate: false },
     otclient: { version: "", revision: 0, needsUpdate: false },
   };
 
   onMount(async () => {
-    await refreshGameState("tibia1511");
     await refreshGameState("otclient");
     hasLocal = await LocalEnabled();
     ready = true;
@@ -163,7 +160,7 @@
             <div>
               <h3>{game.name}</h3>
             </div>
-            <button class="settings" on:click={() => openSettings(game.id)} disabled={updating}>
+            <button class="settings" on:click={openSettings} disabled={updating}>
               <SettingsIcon />
             </button>
           </div>

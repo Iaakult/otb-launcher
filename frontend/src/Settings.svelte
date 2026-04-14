@@ -4,7 +4,6 @@
   import { LocalEnabled, OpenClientLocation, ToggleLocal } from "../wailsjs/go/main/App.js";
 
   export let closeSettings: () => void;
-  export let activeGame: "tibia1511" | "otclient";
 
   let localEnabled: boolean | undefined = undefined;
 
@@ -13,7 +12,7 @@
   });
 
   function openClientLocation() {
-    OpenClientLocation(activeGame);
+    OpenClientLocation("otclient");
   }
 
   $: if (localEnabled !== undefined) ToggleLocal(localEnabled);
@@ -24,7 +23,7 @@
 </button>
 <div>
   <h1>Settings</h1>
-  <small>Jogo selecionado: {activeGame === "tibia1511" ? "Tibia 15.11" : "OTClient"}</small>
+  <small>Cliente selecionado: OTBClient</small>
   <button class="client" on:click={openClientLocation}>Open client location</button>
 
   <label>

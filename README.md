@@ -6,7 +6,7 @@ Este launcher usa um fluxo simples de atualizacao por ZIP.
 
 1. Baixa `version.json` do servidor.
 2. Compara a versao remota com `.launcher_version` local.
-3. Se houver update, baixa `gameID.zip`.
+3. Se houver update, baixa `otclient.zip`.
 4. Remove a instalacao anterior por completo, preservando apenas `characterdata`.
 5. Extrai o ZIP diretamente, sem conversao, sem patch incremental e sem compressao adicional.
 6. Salva a nova versao local.
@@ -22,10 +22,14 @@ Este launcher usa um fluxo simples de atualizacao por ZIP.
 ## Arquivos esperados no servidor
 
 - `version.json`
-- `tibia1511.zip`
 - `otclient.zip`
 - `OTBaiak-Launcher.exe`
 - `OTBaiak-Launcher.exe.sha256`
+
+## Cliente publicado
+
+- O launcher distribui apenas o cliente `otclient`.
+- Na interface, esse cliente aparece como `OTBClient`.
 
 ## Observacao operacional
 

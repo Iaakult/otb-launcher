@@ -37,15 +37,9 @@ type GameProfile struct {
 }
 
 var gameProfiles = map[string]GameProfile{
-	"tibia1511": {
-		ID:         "tibia1511",
-		Name:       "Tibia 15.11",
-		RemotePath: "tibia1511",
-		InstallDir: "OTBaiak Client",
-	},
 	"otclient": {
 		ID:         "otclient",
-		Name:       "OTClient",
+		Name:       "OTBClient",
 		RemotePath: "otclient",
 		InstallDir: "OTBClient",
 	},
@@ -570,7 +564,6 @@ func (a *App) localExecutable(gameID string) string {
 }
 
 var defaultExecutables = map[string]string{
-	"tibia1511": "bin/client.exe",
 	"otclient":  "OTBaiak OTC.exe",
 }
 
